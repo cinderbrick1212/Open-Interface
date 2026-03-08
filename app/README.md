@@ -31,7 +31,7 @@ python3 app.py
 +--------------------------------------------------------------------+
 ```
 
-**Moondream2 Hybrid mode** (2-LLM pipeline — local vision + remote planning):
+**Moondream2 Hybrid mode** (unified pipeline — Moondream local + Gemini Flash API):
 ```
 +--------------------------------------------------------------------+
 | App                                                                |
@@ -43,46 +43,44 @@ python3 app.py
 |        | (via MP Queues)                                           |
 |        v                                                           |
 |  +-----------+         +------------------------------------------+|
-|  |           |         | MoondreamHybrid                          ||
-|  |           |         |                                          ||
-|  |           |  Goal   |  Screenshot ──► Moondream2 (local/cloud) ||
-|  |    Core   | ------> |                   caption() ─┐ parallel  ||
-|  |           |         |                   query()  ──┤           ||
-|  |           |         |                              v           ||
-|  |           |         |              Text description            ||
-|  |           |         |                     │                    ||
-|  |           |         |                     v                    ||
-|  |           | <------ |          Planning LLM (text-only)        ||
-|  +-----------+  JSON   |            (gpt-4o-mini / etc.)          ||
-|        |               +------------------------------------------+|
-|        v                                                           |
+|  |           |         | MoondreamHybrid (unified pipeline)       ||
+|  |           |  Goal   |                                          ||
+|  |           | ------> |  Screenshot ──┬──► Gemini Flash (API)    ||
+|  |    Core   |         |              │     (first + periodic)     ||
+|  |           |         |              │     full plan + guidance   ||
+|  |           |         |              │          │                 ||
+|  |           |         |              │          │ guidance ──┐    ||
+|  |           |         |              │          v            │    ||
+|  |           |         |              └──► Moondream (local)  │    ||
+|  |           |         |                   query() per step ◄─┘   ||
+|  |           |         |                   fast, real-time         ||
+|  |           |         |                        │                  ||
+|  |           | <------ |                   JSON instructions       ||
+|  +-----------+  JSON   |                                          ||
+|        |               | Moondream can ESCALATE → triggers Gemini ||
+|        v               +------------------------------------------+|
 |  +-------------+                                                   |
 |  | Interpreter | ──► pyautogui (mouse + keyboard)                  |
 |  +-------------+                                                   |
 +--------------------------------------------------------------------+
 ```
 
-### Performance pipeline (Moondream2 Hybrid)
+### Unified pipeline data flow (Moondream2 Hybrid)
 
-Between automation steps, the vision analysis for step N+1 is
-**prefetched in a background thread** while commands for step N execute:
+Both LLMs share a **single data pipeline** (screenshot → grid).  The first
+screenshot after a user prompt always goes to **Gemini Flash** for full
+planning.  Then **Moondream** takes over locally, with Gemini called again
+only periodically or when Moondream escalates:
 
 ```
-Step N:  [Moondream ∥ caption+query] → [Planning LLM] → [Execute cmds] ─╮
-Step N+1:                                                 [Prefetch ∥]  ─╯→ [Planning LLM] → [Execute] ─╮
-Step N+2:                                                                    [Prefetch ∥]  ─────────────╯→ ...
+Step 0:  [Screenshot] → [Gemini Flash plans + guidance] → [Execute cmds]   ← first SS → API
+Step 1:  [Screenshot] → [Moondream local plan]          → [Execute]
+Step 2:  [Screenshot] → [Moondream local plan]          → [Execute]
+Step 3:  [Screenshot] → [Gemini Flash review + guidance] → [Execute]       ← periodic
+Step 4:  [Screenshot] → [Moondream / ESCALATE?]         → [Execute]
+  ...
 ```
 
-### Architecture decision: why vision/planning split, not mouse/keyboard
-
-We evaluated splitting the local model into a "mouse LLM" and a "keyboard
-LLM" and concluded the **vision/planning split is superior**:
-
-| Criterion | Vision / Planning split ✅ | Mouse / Keyboard split ❌ |
-|-----------|:---:|:---:|
-| Coordination needed | Minimal (text handoff) | High (focus, modifiers, state) |
-| Memory on 8 GB | 1 local model | 2 local models (~2× RAM) |
-| Covers all tasks | 100% | ~75-85% without workarounds |
-| Modifier combos (ctrl+click) | Handled by single planner | Requires cross-model sync |
-| Click-to-focus → type | Single plan, sequential | Needs handshake protocol |
-| Latency overhead | Low (async prefetch) | High (coordination round-trips) |
+The local model can **decide to stop** and let Gemini Flash analyse by
+responding with ``UNCERTAIN``.  This triggers an immediate API review
+regardless of the step interval.
