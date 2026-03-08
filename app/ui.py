@@ -9,6 +9,7 @@ from PIL import Image, ImageTk
 
 from llm import DEFAULT_MODEL_NAME
 from utils.settings import Settings
+from utils.window_selector import list_windows, get_full_screen_rect
 from version import version
 
 
@@ -326,6 +327,9 @@ class UI:
             # to core.
             self.user_request_queue = Queue()
 
+            # Queue for window selection changes: sends (hwnd, rect) or None for full screen
+            self.window_selection_queue = Queue()
+
             # Put messages to display on the UI here so we can dequeue them in the main thread
             self.message_display_queue = Queue()
             # Set up periodic UI processing
@@ -353,9 +357,31 @@ class UI:
                                       wraplength=300)
             heading_label.grid(column=0, row=1, columnspan=3, sticky=ttk.W)
 
+            # Window/Screen selector
+            capture_frame = ttk.Frame(frame)
+            capture_frame.grid(column=0, row=2, columnspan=3, sticky=(ttk.W, ttk.E), pady=(5, 5))
+            capture_frame.columnconfigure(1, weight=1)
+
+            capture_label = ttk.Label(capture_frame, text='Capture:', bootstyle="info")
+            capture_label.grid(column=0, row=0, padx=(0, 5))
+
+            self.window_var = ttk.StringVar(value='Full Screen')
+            self.window_combobox = ttk.Combobox(capture_frame, textvariable=self.window_var,
+                                                state="readonly", width=30)
+            self.window_combobox.grid(column=1, row=0, sticky=(ttk.W, ttk.E))
+            self.window_combobox.bind('<<ComboboxSelected>>', self.on_window_selected)
+
+            refresh_btn = ttk.Button(capture_frame, text='↻', bootstyle="info-outline",
+                                     command=self.refresh_window_list, width=3)
+            refresh_btn.grid(column=2, row=0, padx=(5, 0))
+
+            # Store window data: list of (title, hwnd, rect) tuples
+            self._window_data = []
+            self.refresh_window_list()
+
             # Entry widget
             self.entry = ttk.Entry(frame, width=38)
-            self.entry.grid(column=0, row=2, sticky=(ttk.W, ttk.E))
+            self.entry.grid(column=0, row=3, sticky=(ttk.W, ttk.E))
 
             # Bind the Enter key to the submit function
             self.entry.bind("<Return>", lambda event: self.execute_user_request())
@@ -363,11 +389,11 @@ class UI:
 
             # Mic Button
             # mic_button = ttk.Button(frame, image=self.mic_icon, bootstyle="link", command=self.start_voice_input_thread)
-            # mic_button.grid(column=1, row=2, padx=(0, 5))
+            # mic_button.grid(column=1, row=3, padx=(0, 5))
 
             # Submit Button
             button = ttk.Button(frame, text='Submit', bootstyle="success", command=self.execute_user_request)
-            button.grid(column=2, row=2, padx=10)
+            button.grid(column=2, row=3, padx=10)
 
             # Settings Button
             settings_button = ttk.Button(self, text='Settings', bootstyle="info-outline", command=self.open_settings)
@@ -379,14 +405,40 @@ class UI:
 
             # Text display for echoed input
             self.input_display = ttk.Label(frame, text='', font=('Helvetica', 16), wraplength=400)
-            self.input_display.grid(column=0, row=3, columnspan=3, sticky=ttk.W)
+            self.input_display.grid(column=0, row=4, columnspan=3, sticky=ttk.W)
 
             # Text display for additional messages
             self.message_display = ttk.Label(frame, text='', font=('Helvetica', 14), wraplength=400)
-            self.message_display.grid(column=0, row=6, columnspan=3, sticky=ttk.W)
+            self.message_display.grid(column=0, row=7, columnspan=3, sticky=ttk.W)
 
         def open_settings(self) -> None:
             UI.SettingsWindow(self)
+
+        def refresh_window_list(self) -> None:
+            """Refresh the list of available windows for the capture dropdown."""
+            windows = list_windows()
+            self._window_data = []
+            titles = ['Full Screen']
+            for w in windows:
+                title = w['title']
+                # Truncate long titles for the dropdown
+                display = title if len(title) <= 50 else title[:47] + '...'
+                titles.append(display)
+                self._window_data.append((title, w['hwnd'], w['rect']))
+            self.window_combobox['values'] = titles
+            if self.window_var.get() not in titles:
+                self.window_var.set('Full Screen')
+
+        def on_window_selected(self, event=None) -> None:
+            """Handle window selection from the dropdown."""
+            selection = self.window_var.get()
+            if selection == 'Full Screen':
+                self.window_selection_queue.put(None)
+            else:
+                idx = self.window_combobox.current() - 1  # -1 because 'Full Screen' is index 0
+                if 0 <= idx < len(self._window_data):
+                    _, hwnd, rect = self._window_data[idx]
+                    self.window_selection_queue.put(rect)
 
         def stop_previous_request(self) -> None:
             # Interrupt currently running request by queueing a stop signal.

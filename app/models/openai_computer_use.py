@@ -5,8 +5,8 @@ from utils.screen import Screen
 
 
 class OpenAIComputerUse(Model):
-    def __init__(self, model_name, base_url, api_key, context):
-        super().__init__(model_name, base_url, api_key, context)
+    def __init__(self, model_name, base_url, api_key, context, screen=None):
+        super().__init__(model_name, base_url, api_key, context, screen)
         self.previous_response_id = None
         self.last_call_id = None
         self.pending_safety_checks = []
@@ -21,9 +21,10 @@ class OpenAIComputerUse(Model):
         return self.convert_llm_response_to_json_instructions(llm_response)
 
     def send_message_to_llm(self, original_user_request: str) -> Any:
-        base64_img = Screen().get_screenshot_in_base64()
+        screen = self.screen or Screen()
+        base64_img = screen.get_gridded_screenshot_in_base64()
         screenshot_url = f'data:image/png;base64,{base64_img}'
-        screen_width, screen_height = Screen().get_size()
+        screen_width, screen_height = screen.get_size()
 
         tools = [{
             'type': 'computer_use_preview',

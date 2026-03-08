@@ -13,7 +13,8 @@ class GPT5(Model):
         return json_instructions
 
     def format_user_request_for_llm(self, original_user_request: str, step_num: int) -> list[dict[str, Any]]:
-        base64_img: str = Screen().get_screenshot_in_base64()
+        screen = self.screen or Screen()
+        base64_img: str = screen.get_gridded_screenshot_in_base64()
         request_data: str = json.dumps({
             'original_user_request': original_user_request,
             'step_num': step_num

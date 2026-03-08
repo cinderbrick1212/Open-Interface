@@ -11,8 +11,8 @@ from utils.screen import Screen
 # [ ] Function calling with assistants api - https://platform.openai.com/docs/assistants/tools/function-calling/quickstart
 
 class GPT4o(Model):
-    def __init__(self, model_name, base_url, api_key, context):
-        super().__init__(model_name, base_url, api_key, context)
+    def __init__(self, model_name, base_url, api_key, context, screen=None):
+        super().__init__(model_name, base_url, api_key, context, screen)
 
         # GPT4o has Assistant Mode enabled that we can utilize to make Open Interface be more contextually aware
         self.assistant = self.client.beta.assistants.create(
@@ -79,7 +79,8 @@ class GPT4o(Model):
     def upload_screenshot_and_get_file_id(self):
         # Files are used to upload documents like images that can be used with features like Assistants
         # Assistants API cannot take base64 images like chat.completions API
-        filepath = Screen().get_screenshot_file()
+        screen = self.screen or Screen()
+        filepath = screen.get_gridded_screenshot_file()
 
         response = self.client.files.create(
             file=open(filepath, 'rb'),

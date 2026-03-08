@@ -8,6 +8,9 @@ from models.gemini import Gemini
 class ModelFactory:
     @staticmethod
     def create_model(model_name, *args):
+        """
+        args: (base_url, api_key, context, screen)
+        """
         try:
             if model_name == 'gpt-4o' or model_name == 'gpt-4o-mini':
                 return GPT4o(model_name, *args)
@@ -18,6 +21,7 @@ class ModelFactory:
             elif model_name == 'gpt-4-vision-preview' or model_name == 'gpt-4-turbo':
                 return GPT4v(model_name, *args)
             elif model_name.startswith("gemini"):
+                # Gemini doesn't use base_url, so skip it; pass (api_key, context, screen)
                 return Gemini(model_name, *args[1:])
             else:
                 # Llama/Llava models will work with the standard code I wrote for GPT4V without the assitant mode features of gpt4o

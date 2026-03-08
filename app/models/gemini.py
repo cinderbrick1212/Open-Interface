@@ -8,10 +8,11 @@ from utils.screen import Screen
 
 
 class Gemini:
-    def __init__(self, model_name, api_key, context):
+    def __init__(self, model_name, api_key, context, screen=None):
         self.model_name = model_name
         self.api_key = api_key
         self.context = context
+        self.screen = screen
         self.client = genai.Client(api_key=api_key)
 
         if api_key:
@@ -34,7 +35,8 @@ class Gemini:
         return json_instructions
 
     def format_user_request_for_llm(self, original_user_request, step_num) -> list[Any]:
-        base64_img: str = Screen().get_screenshot_in_base64()
+        screen = self.screen or Screen()
+        base64_img: str = screen.get_gridded_screenshot_in_base64()
 
         request_data: str = json.dumps({
             "original_user_request": original_user_request,

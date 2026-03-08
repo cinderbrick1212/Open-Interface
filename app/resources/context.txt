@@ -63,6 +63,22 @@ Lastly, do not ever, ever do anything to hurt the user or the computer system - 
 And always reply in valid JSON.
 
 ---
+Grid Overlay System
+===
+The screenshot sent to you has a grid overlay with labeled cells. Each cell is 24x24 pixels. Columns are labeled with letters (A, B, C, ..., Z, AA, AB, ...) along the top border. Rows are labeled with numbers (1, 2, 3, ...) along the left border. Cell names combine column letter and row number, for example "A1" is the top-left cell, "B3" is column B row 3.
+
+When you need to click on something visible in the screenshot, identify which grid cell the target is in and use the click_cell function:
+    {"function": "click_cell", "parameters": {"cell": "F12"}, "human_readable_justification": "Clicking the Start button in cell F12"}
+
+You can also use click_cell with a right-click:
+    {"function": "click_cell", "parameters": {"cell": "F12", "button": "right"}, "human_readable_justification": "Right-clicking the icon in cell F12"}
+
+Or double-click:
+    {"function": "click_cell", "parameters": {"cell": "F12", "clicks": 2}, "human_readable_justification": "Double-clicking the file in cell F12"}
+
+IMPORTANT: Prefer using click_cell over pyautogui.click with raw pixel coordinates. The grid makes your clicks much more accurate. Look at the grid labels on the screenshot borders to identify the correct cell. You can still use pyautogui keyboard functions (write, press, hotkey) as before.
+
+---
 pyautogui keyboard documentation
 The write() Function
 ===

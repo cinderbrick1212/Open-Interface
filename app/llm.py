@@ -1,8 +1,9 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from models.factory import ModelFactory
 from utils import local_info
+from utils.grid import get_grid_dimensions
 from utils.screen import Screen
 from utils.settings import Settings
 
@@ -49,14 +50,15 @@ class LLM:
         to be communicated to the user if it's present.
     """
 
-    def __init__(self):
+    def __init__(self, screen: Optional[Screen] = None):
         self.settings_dict: dict[str, str] = Settings().get_dict()
         model_name, base_url, api_key = self.get_settings_values()
 
         self.model_name = model_name
+        self.screen = screen or Screen()
         context = self.read_context_txt_file()
 
-        self.model = ModelFactory.create_model(self.model_name, base_url, api_key, context)
+        self.model = ModelFactory.create_model(self.model_name, base_url, api_key, context, self.screen)
 
     def get_settings_values(self) -> tuple[str, str, str]:
         model_name = self.settings_dict.get('model') or DEFAULT_MODEL_NAME
@@ -74,7 +76,11 @@ class LLM:
 
         context += f' Locally installed apps are {",".join(local_info.locally_installed_apps)}.'
         context += f' OS is {local_info.operating_system}.'
-        context += f' Primary screen size is {Screen().get_size()}.\n'
+        context += f' Primary screen size is {self.screen.get_size()}.\n'
+
+        # Add grid dimension info
+        region = self.screen.get_capture_region()
+        context += f' Grid overlay: {get_grid_dimensions(region)}.\n'
 
         if 'default_browser' in self.settings_dict.keys() and self.settings_dict['default_browser']:
             context += f'\nDefault browser is {self.settings_dict["default_browser"]}.'

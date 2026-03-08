@@ -11,6 +11,8 @@ class Interpreter:
         # MP Queue to put current status of execution in while processes commands.
         # It helps us reflect the current status on the UI.
         self.status_queue = status_queue
+        # Cell-to-screen-coordinate map, updated each time a gridded screenshot is taken
+        self.cell_map: dict[str, tuple[int, int]] = {}
 
     def process_commands(self, json_commands: list[dict[str, Any]]) -> bool:
         """
@@ -50,13 +52,26 @@ class Interpreter:
 
     def execute_function(self, function_name: str, parameters: dict[str, Any]) -> None:
         """
-            We are expecting only two types of function calls below
+            We are expecting these types of function calls:
             1. time.sleep() - to wait for web pages, applications, and other things to load.
             2. pyautogui calls to interact with system's mouse and keyboard.
+            3. click_cell - to click on a grid cell by name (e.g. "F12").
         """
         # Strip to bare name to normalize
         if function_name.startswith('pyautogui.'):
             function_name = function_name.split('.')[-1]
+
+        # Handle click_cell: translate cell name to screen coordinates and click
+        if function_name == 'click_cell':
+            cell = parameters.get('cell', '').upper()
+            if cell not in self.cell_map:
+                print(f'Unknown grid cell "{cell}". Available cells: {len(self.cell_map)}')
+                return
+            x, y = self.cell_map[cell]
+            button = parameters.get('button', 'left')
+            clicks = parameters.get('clicks', 1)
+            pyautogui.click(x, y, button=button, clicks=clicks)
+            return
 
         # Sometimes pyautogui needs warming up i.e. sometimes first call isn't executed hence padding a random call here
         pyautogui.press("command", interval=0.2)

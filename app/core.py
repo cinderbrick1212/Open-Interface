@@ -6,6 +6,7 @@ from openai import OpenAIError
 
 from interpreter import Interpreter
 from llm import LLM
+from utils.screen import Screen
 from utils.settings import Settings
 
 
@@ -15,17 +16,22 @@ class Core:
         self.interrupt_execution = False
         self.settings_dict = Settings().get_dict()
 
+        self.screen = Screen()
         self.interpreter = Interpreter(self.status_queue)
 
         self.llm = None
         try:
-            self.llm = LLM()
+            self.llm = LLM(self.screen)
         except OpenAIError as e:
             self.status_queue.put(f'Set your OpenAPI API Key in Settings and Restart the App. Error: {e}')
         except Exception as e:
             self.status_queue.put(f'An error occurred during startup. Please fix and restart the app.\n'
                                   f'Error likely in file {Settings().settings_file_path}.\n'
                                   f'Error: {e}')
+
+    def set_capture_region(self, region: Optional[tuple[int, int, int, int]]) -> None:
+        """Set the screen capture region. None means full screen."""
+        self.screen.set_capture_region(region)
 
     def execute_user_request(self, user_request: str) -> None:
         self.stop_previous_request()
@@ -56,10 +62,15 @@ class Core:
         try:
             instructions: dict[str, Any] = self.llm.get_instructions_for_objective(user_request, step_num)
 
+            # Sync the cell map from the latest gridded screenshot to the interpreter
+            self.interpreter.cell_map = self.screen.cell_map
+
             if instructions == {}:
                 # Sometimes LLM sends malformed JSON response, in that case retry once more.
                 instructions = self.llm.get_instructions_for_objective(user_request + ' Please reply in valid JSON',
                                                                        step_num)
+                # Sync the cell map after retry
+                self.interpreter.cell_map = self.screen.cell_map
 
             for step in instructions['steps']:
                 if self.interrupt_execution:

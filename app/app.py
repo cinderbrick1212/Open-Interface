@@ -42,10 +42,12 @@ class App:
         # Create threads to facilitate communication between core and ui through queues
         self.core_to_ui_connection_thread = threading.Thread(target=self.send_status_from_core_to_ui, daemon=True)
         self.ui_to_core_connection_thread = threading.Thread(target=self.send_user_request_from_ui_to_core, daemon=True)
+        self.window_selection_thread = threading.Thread(target=self.handle_window_selection, daemon=True)
 
     def run(self) -> None:
         self.core_to_ui_connection_thread.start()
         self.ui_to_core_connection_thread.start()
+        self.window_selection_thread.start()
 
         self.ui.run()
 
@@ -73,6 +75,13 @@ class App:
 
             else:
                 threading.Thread(target=self.core.execute_user_request, args=(user_request,), daemon=True).start()
+
+    def handle_window_selection(self) -> None:
+        """Listen for window selection changes from the UI and update Core's capture region."""
+        while True:
+            region = self.ui.main_window.window_selection_queue.get()
+            print(f'Window selection changed: {region}')
+            self.core.set_capture_region(region)
 
     def cleanup(self):
         self.core.cleanup()
