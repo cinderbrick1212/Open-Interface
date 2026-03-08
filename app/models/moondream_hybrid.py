@@ -12,7 +12,7 @@ from PIL import Image
 from models.model import Model
 from utils.grid import create_gridded_screenshot, gridded_screenshot_to_base64
 from utils.screen import Screen
-from utils.screen_recorder import FrameBuffer
+from utils.screen_recorder import DEFAULT_VIDEO_FPS, FrameBuffer
 from utils.settings import Settings
 
 # Default Gemini Flash model used for API planning / supervision.
@@ -116,8 +116,8 @@ class MoondreamHybrid(Model):
         ]
 
         # --- Frame buffer for video-based API context ---
-        video_fps = int(settings.get('video_fps', 0)) or None  # 0/absent → default
-        self._frame_buffer = FrameBuffer(fps=video_fps) if video_fps else FrameBuffer()
+        video_fps = int(settings.get('video_fps', 0)) or DEFAULT_VIDEO_FPS
+        self._frame_buffer = FrameBuffer(fps=video_fps)
 
         # --- Pipeline state ---
         self._api_review_interval = int(settings.get(
