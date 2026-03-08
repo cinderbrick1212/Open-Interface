@@ -1,6 +1,6 @@
 import json
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any
+from typing import Any, Optional
 
 import moondream as md
 from PIL import Image
@@ -68,7 +68,7 @@ class MoondreamHybrid(Model):
         self._executor = ThreadPoolExecutor(
             max_workers=2, thread_name_prefix='moondream'
         )
-        self._prefetch_future: Future | None = None
+        self._prefetch_future: Optional[Future] = None
 
     # ------------------------------------------------------------------
     # Public interface (called by Core)
