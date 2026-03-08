@@ -31,7 +31,7 @@ python3 app.py
 +--------------------------------------------------------------------+
 ```
 
-**Moondream2 Hybrid mode** (unified pipeline — Moondream local + Gemini Flash API):
+**Moondream2 Hybrid mode** (Moondream local + Gemini Flash API via video):
 ```
 +--------------------------------------------------------------------+
 | App                                                                |
@@ -43,19 +43,24 @@ python3 app.py
 |        | (via MP Queues)                                           |
 |        v                                                           |
 |  +-----------+         +------------------------------------------+|
-|  |           |         | MoondreamHybrid (unified pipeline)       ||
+|  |           |         | MoondreamHybrid                          ||
 |  |           |  Goal   |                                          ||
-|  |           | ------> |  Screenshot ──┬──► Gemini Flash (API)    ||
-|  |    Core   |         |              │     (first + periodic)     ||
-|  |           |         |              │     full plan + guidance   ||
-|  |           |         |              │          │                 ||
-|  |           |         |              │          │ guidance ──┐    ||
-|  |           |         |              │          v            │    ||
-|  |           |         |              └──► Moondream (local)  │    ||
-|  |           |         |                   query() per step ◄─┘   ||
-|  |           |         |                   fast, real-time         ||
-|  |           |         |                        │                  ||
-|  |           | <------ |                   JSON instructions       ||
+|  |           | ------> |  Screenshot ──► Grid overlay ──┐         ||
+|  |    Core   |         |                                │         ||
+|  |           |         |         ┌──────────────────────┤         ||
+|  |           |         |         ▼                      ▼         ||
+|  |           |         |    FrameBuffer            Moondream       ||
+|  |           |         |    (rolling window)       (local, fast)   ||
+|  |           |         |    gridded frames         gridded SS      ||
+|  |           |         |         │                 query()/step    ||
+|  |           |         |         ▼ (periodic)           │         ||
+|  |           |         |    Compile MP4                  │         ||
+|  |           |         |         │                      │         ||
+|  |           |         |         ▼                      │         ||
+|  |           |         |    Gemini Flash   guidance ──►  │         ||
+|  |           |         |    (API, video)                 │         ||
+|  |           |         |         │                      │         ||
+|  |           | <------ |         └──► JSON instructions ◄┘        ||
 |  +-----------+  JSON   |                                          ||
 |        |               | Moondream can ESCALATE → triggers Gemini ||
 |        v               +------------------------------------------+|
@@ -65,19 +70,28 @@ python3 app.py
 +--------------------------------------------------------------------+
 ```
 
-### Unified pipeline data flow (Moondream2 Hybrid)
+### Data pipeline (Moondream2 Hybrid)
 
-Both LLMs share a **single data pipeline** (screenshot → grid).  The first
-screenshot after a user prompt always goes to **Gemini Flash** for full
-planning.  Then **Moondream** takes over locally, with Gemini called again
-only periodically or when Moondream escalates:
+Both LLMs receive **gridded screenshots** (with cell overlay), but in
+different formats:
+
+* **Moondream** (local) gets a single gridded screenshot every step — fast,
+  real-time action planning.
+* **Gemini Flash** (API) gets a **video** compiled from the continuous
+  rolling frame buffer of gridded screenshots — temporal context about what
+  happened on screen.
+
+The frame buffer is **never cleared between API calls** — each video is a
+continuous, overlapping window of recent activity:
 
 ```
-Step 0:  [Screenshot] → [Gemini Flash plans + guidance] → [Execute cmds]   ← first SS → API
-Step 1:  [Screenshot] → [Moondream local plan]          → [Execute]
-Step 2:  [Screenshot] → [Moondream local plan]          → [Execute]
-Step 3:  [Screenshot] → [Gemini Flash review + guidance] → [Execute]       ← periodic
-Step 4:  [Screenshot] → [Moondream / ESCALATE?]         → [Execute]
+Step 0:  [Grid SS] → buffer=[0]       → [Gemini: video(0)]     → [Execute]  ← first
+Step 1:  [Grid SS] → buffer=[0,1]     → [Moondream: SS(1)]     → [Execute]
+Step 2:  [Grid SS] → buffer=[0,1,2]   → [Moondream: SS(2)]     → [Execute]
+Step 3:  [Grid SS] → buffer=[0,1,2,3] → [Gemini: video(0..3)]  → [Execute]  ← periodic
+Step 4:  [Grid SS] → buffer=[0..4]    → [Moondream: SS(4)]      → [Execute]
+Step 5:  [Grid SS] → buffer=[0..5]    → [Moondream / ESCALATE?] → [Execute]
+Step 6:  [Grid SS] → buffer=[0..6]    → [Gemini: video(0..6)]   → [Execute]  ← continuous!
   ...
 ```
 

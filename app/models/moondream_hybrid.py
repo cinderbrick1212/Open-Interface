@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -11,6 +12,7 @@ from PIL import Image
 from models.model import Model
 from utils.grid import create_gridded_screenshot, gridded_screenshot_to_base64
 from utils.screen import Screen
+from utils.screen_recorder import FrameBuffer
 from utils.settings import Settings
 
 # Default Gemini Flash model used for API planning / supervision.
@@ -31,31 +33,42 @@ _ESCALATION_SIGNALS = [
 
 
 class MoondreamHybrid(Model):
-    """Unified-pipeline 2-LLM model: Moondream (local) + Gemini Flash (API).
+    """Dual-LLM model: Moondream (local, real-time) + Gemini Flash (API, video).
 
-    A **single data pipeline** (screenshot → grid) feeds both models at
-    different frequencies:
+    Both models receive screenshots **with the grid overlay**, but at
+    different frequencies and in different formats:
 
     * **Moondream2** (local) runs *every* step with a **single fast query**
-      — no caption, no layout analysis.  Images are pre-encoded once via
+      on a gridded screenshot.  Images are pre-encoded once via
       ``encode_image()`` to avoid redundant JPEG conversion.
-    * **Gemini Flash** (API) runs *less frequently* — on the first step
-      (receives the starting screenshot), every ``api_review_interval``
-      local steps, or when Moondream escalates.  It receives the actual
-      screenshot so it can produce a full action plan and high-level
-      guidance.
+    * **Gemini Flash** (API) runs *less frequently* — on the first step,
+      every ``api_review_interval`` local steps, or when Moondream
+      escalates.  It receives a **short MP4 video** compiled from the
+      recent gridded screenshots (with the grid overlay), giving it
+      temporal context about what happened on screen.
 
     The API guidance is fed back into Moondream's prompt so subsequent
     local iterations stay on track.  Moondream can also **decide to stop
     and let the API analyse** by responding with ``UNCERTAIN``.
 
-    Real-time optimizations
-    -----------------------
-    * Local steps: 1 Moondream query (not 3).
-    * ``encode_image()`` once per step.
-    * ``caption(length="short")`` only during API steps.
-    * Concise prompt text for faster inference.
-    * Prefetch: next screenshot captured during command execution.
+    Data pipeline
+    -------------
+    ::
+
+        Screenshot → Grid overlay → Gridded frame
+                                       │
+                       ┌───────────────┤
+                       ▼               ▼
+                  FrameBuffer      Moondream (local)
+                  (ring buffer)    query() per step
+                       │           real-time, gridded
+                       ▼
+                  Compile MP4
+                  (on API steps)
+                       │
+                       ▼
+                  Gemini Flash
+                  (video input)
 
     Settings (in ~/.open-interface/settings.json):
         moondream_api_key      – API key for Moondream Cloud (optional).
@@ -98,6 +111,9 @@ class MoondreamHybrid(Model):
             if category.value != 'HARM_CATEGORY_UNSPECIFIED'
         ]
 
+        # --- Frame buffer for video-based API context ---
+        self._frame_buffer = FrameBuffer()
+
         # --- Pipeline state ---
         self._api_review_interval = int(settings.get(
             'api_review_interval', DEFAULT_API_REVIEW_INTERVAL
@@ -118,36 +134,40 @@ class MoondreamHybrid(Model):
     def get_instructions_for_objective(
         self, original_user_request: str, step_num: int = 0
     ) -> dict[str, Any]:
-        """Unified pipeline: Moondream runs every step (fast, 1 query);
-        API LLM runs less frequently or when Moondream escalates."""
+        """Unified pipeline: Moondream gets gridded screenshots every step;
+        Gemini gets a video of recent gridded frames on API steps."""
 
         if step_num == 0:
             self._local_step_count = 0
             self._api_guidance = ''
+            self._frame_buffer.clear()
 
         screen = self.screen or Screen()
 
-        # ── Stage 1: Shared pipeline — screenshot → grid ──
+        # ── Stage 1: Shared pipeline — screenshot → grid overlay ──
         gridded_img, cell_map = self._get_or_create_screenshot(screen)
         screen.cell_map = cell_map
 
-        # ── Stage 2: Pre-encode image once (avoids re-encoding per call) ──
+        # ── Stage 2: Store gridded frame for video compilation ──
+        self._frame_buffer.add_frame(gridded_img)
+
+        # ── Stage 3: Pre-encode gridded image for Moondream ──
         try:
             encoded_img = self.vision.encode_image(gridded_img)
         except Exception as exc:
             print(f'encode_image failed ({exc}), using raw PIL image')
             encoded_img = gridded_img  # Fallback to raw PIL image
 
-        # ── Stage 3: Route — local (fast) or API (thorough) ──
+        # ── Stage 4: Route — local (fast) or API (thorough) ──
         if not self._should_use_api(step_num):
-            # Real-time path: single fast Moondream query, no caption/layout
+            # Real-time path: single fast Moondream query on gridded screenshot
             result = self._local_plan(original_user_request, encoded_img)
             if result is not None:
                 self._local_step_count += 1
                 return result
             # Moondream escalated → fall through to API
 
-        # ── Stage 4: API path — short analysis + screenshot + planning ──
+        # ── Stage 5: API path — compile video + Moondream analysis + Gemini ──
         description = self._analyze_screen_for_api(encoded_img)
         instructions = self._api_plan(
             original_user_request, step_num, description, gridded_img
@@ -232,11 +252,16 @@ class MoondreamHybrid(Model):
     ) -> dict[str, Any]:
         """Full API LLM planning call.
 
-        The actual screenshot is sent alongside Moondream's text description
-        so the API LLM can see the screen directly.
+        Compiles the frame buffer into a video and sends it to Gemini so
+        it has temporal context (what happened on screen recently).  Falls
+        back to a single gridded screenshot if video compilation fails.
+        The frame buffer is NOT cleared — recordings stay continuous.
         """
+        # Compile continuous video from the rolling frame buffer
+        video_b64 = self._frame_buffer.to_video_base64()
+
         messages = self._build_planning_request(
-            user_request, step_num, description, gridded_img
+            user_request, step_num, description, gridded_img, video_b64
         )
         llm_response = self._call_planning_llm(messages)
         instructions = self._parse_api_response(llm_response)
@@ -321,12 +346,34 @@ class MoondreamHybrid(Model):
         step_num: int,
         screen_description: str,
         gridded_img: Image.Image,
+        video_b64: Optional[str] = None,
     ) -> list[dict[str, Any]]:
         request_data: str = json.dumps({
             'original_user_request': user_request,
             'step_num': step_num,
         })
 
+        if video_b64:
+            text = (
+                f"{self.context}\n\n"
+                f"CURRENT SCREEN STATE (analyzed by local vision model):\n"
+                f"{screen_description}\n\n"
+                f"{request_data}"
+                f"\n\nAttached is a video of recent screen activity "
+                f"(gridded screenshots with cell overlay). "
+                f"Use it to understand what happened and plan next steps:"
+            )
+
+            # Gemini inline_data: send MP4 video for temporal context
+            return [
+                {"text": text},
+                {"inline_data": {
+                    "mime_type": "video/mp4",
+                    "data": video_b64,
+                }},
+            ]
+
+        # Fallback: single gridded screenshot if video unavailable
         text = (
             f"{self.context}\n\n"
             f"CURRENT SCREEN STATE (analyzed by local vision model):\n"
@@ -335,7 +382,6 @@ class MoondreamHybrid(Model):
             f"\n\nHere is a screenshot of the user's screen:"
         )
 
-        # Gemini inline_data format — send the actual screenshot
         base64_img = gridded_screenshot_to_base64(gridded_img)
         return [
             {"text": text},
@@ -376,6 +422,7 @@ class MoondreamHybrid(Model):
 
     def cleanup(self):
         self.cancel_prefetch()
+        self._frame_buffer.clear()
         self._executor.shutdown(wait=False)
 
 
