@@ -19,6 +19,9 @@ DEFAULT_PLANNING_MODEL = 'gemini-2.0-flash'
 # How many local-only steps Moondream handles between API LLM reviews.
 DEFAULT_API_REVIEW_INTERVAL = 3
 
+# Max characters of API guidance fed into Moondream's real-time prompt.
+MAX_GUIDANCE_LENGTH = 200
+
 # Moondream answers containing any of these words trigger an API escalation.
 _ESCALATION_SIGNALS = [
     'uncertain', 'unsure', 'unclear', "can't determine",
@@ -131,7 +134,8 @@ class MoondreamHybrid(Model):
         # ── Stage 2: Pre-encode image once (avoids re-encoding per call) ──
         try:
             encoded_img = self.vision.encode_image(gridded_img)
-        except Exception:
+        except Exception as exc:
+            print(f'encode_image failed ({exc}), using raw PIL image')
             encoded_img = gridded_img  # Fallback to raw PIL image
 
         # ── Stage 3: Route — local (fast) or API (thorough) ──
@@ -180,7 +184,7 @@ class MoondreamHybrid(Model):
         guidance_ctx = ''
         if self._api_guidance:
             # Keep guidance brief for real-time
-            guidance_ctx = f"Plan: {self._api_guidance[:200]}. "
+            guidance_ctx = f"Plan: {self._api_guidance[:MAX_GUIDANCE_LENGTH]}. "
 
         answer = self.vision.query(
             encoded_img,
