@@ -2,6 +2,7 @@ import base64
 import io
 import os
 import tempfile
+import threading
 from typing import Optional
 
 import pyautogui
@@ -12,6 +13,7 @@ from utils.grid import create_gridded_screenshot, gridded_screenshot_to_base64
 
 class Screen:
     def __init__(self):
+        self._lock = threading.Lock()
         # Currently selected capture region: (x, y, w, h) or None for full screen
         self.capture_region: Optional[tuple[int, int, int, int]] = None
         # After taking a gridded screenshot, this holds the cell->coordinate map
@@ -19,7 +21,8 @@ class Screen:
 
     def set_capture_region(self, region: Optional[tuple[int, int, int, int]]) -> None:
         """Set the capture region. None means full screen."""
-        self.capture_region = region
+        with self._lock:
+            self.capture_region = region
 
     def get_size(self) -> tuple[int, int]:
         screen_width, screen_height = pyautogui.size()  # Get the size of the primary monitor.
@@ -27,8 +30,10 @@ class Screen:
 
     def get_screenshot(self) -> Image.Image:
         # Enable screen recording from settings
-        if self.capture_region:
-            x, y, w, h = self.capture_region
+        with self._lock:
+            region = self.capture_region
+        if region:
+            x, y, w, h = region
             img = pyautogui.screenshot(region=(x, y, w, h))
         else:
             img = pyautogui.screenshot()  # Takes roughly 100ms
@@ -36,8 +41,10 @@ class Screen:
 
     def get_capture_region(self) -> tuple[int, int, int, int]:
         """Return the current capture region as (x, y, w, h)."""
-        if self.capture_region:
-            return self.capture_region
+        with self._lock:
+            region = self.capture_region
+        if region:
+            return region
         sw, sh = self.get_size()
         return (0, 0, sw, sh)
 

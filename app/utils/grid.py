@@ -1,7 +1,6 @@
 import base64
 import io
 import string
-from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -78,7 +77,7 @@ def draw_grid_overlay(img: Image.Image, cell_size: int = CELL_SIZE) -> Image.Ima
         x = LABEL_MARGIN + c * cell_size
         # Grid line
         draw.line([(x, LABEL_MARGIN), (x, LABEL_MARGIN + rows * cell_size)],
-                  fill=(255, 0, 0, 128), width=1)
+                  fill=(255, 0, 0), width=1)
         # Column label at top
         if c < cols:
             label = _col_label(c)
@@ -90,7 +89,7 @@ def draw_grid_overlay(img: Image.Image, cell_size: int = CELL_SIZE) -> Image.Ima
         y = LABEL_MARGIN + r * cell_size
         # Grid line
         draw.line([(LABEL_MARGIN, y), (LABEL_MARGIN + cols * cell_size, y)],
-                  fill=(255, 0, 0, 128), width=1)
+                  fill=(255, 0, 0), width=1)
         # Row label on left
         if r < rows:
             label = str(r + 1)

@@ -2,8 +2,6 @@
 Window enumeration for Windows OS.
 Uses ctypes to call Win32 APIs to list visible windows with their titles and positions.
 """
-import ctypes
-import ctypes.wintypes
 import platform
 from typing import Optional
 
@@ -20,6 +18,9 @@ def list_windows() -> list[dict]:
     """
     if not _is_windows():
         return []
+
+    import ctypes
+    import ctypes.wintypes
 
     user32 = ctypes.windll.user32
 
@@ -68,6 +69,9 @@ def get_window_rect(hwnd: int) -> Optional[tuple[int, int, int, int]]:
     """Get the current rect (x, y, w, h) of a window by its handle."""
     if not _is_windows():
         return None
+
+    import ctypes
+    import ctypes.wintypes
 
     user32 = ctypes.windll.user32
     rect = ctypes.wintypes.RECT()

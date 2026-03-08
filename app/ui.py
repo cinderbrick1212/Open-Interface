@@ -9,7 +9,7 @@ from PIL import Image, ImageTk
 
 from llm import DEFAULT_MODEL_NAME
 from utils.settings import Settings
-from utils.window_selector import list_windows, get_full_screen_rect
+from utils.window_selector import list_windows
 from version import version
 
 
@@ -357,27 +357,31 @@ class UI:
                                       wraplength=300)
             heading_label.grid(column=0, row=1, columnspan=3, sticky=ttk.W)
 
-            # Window/Screen selector
-            capture_frame = ttk.Frame(frame)
-            capture_frame.grid(column=0, row=2, columnspan=3, sticky=(ttk.W, ttk.E), pady=(5, 5))
-            capture_frame.columnconfigure(1, weight=1)
-
-            capture_label = ttk.Label(capture_frame, text='Capture:', bootstyle="info")
-            capture_label.grid(column=0, row=0, padx=(0, 5))
-
-            self.window_var = ttk.StringVar(value='Full Screen')
-            self.window_combobox = ttk.Combobox(capture_frame, textvariable=self.window_var,
-                                                state="readonly", width=30)
-            self.window_combobox.grid(column=1, row=0, sticky=(ttk.W, ttk.E))
-            self.window_combobox.bind('<<ComboboxSelected>>', self.on_window_selected)
-
-            refresh_btn = ttk.Button(capture_frame, text='↻', bootstyle="info-outline",
-                                     command=self.refresh_window_list, width=3)
-            refresh_btn.grid(column=2, row=0, padx=(5, 0))
-
-            # Store window data: list of (title, hwnd, rect) tuples
+            # Window/Screen selector (only shown on Windows where window enumeration works)
+            import platform
             self._window_data = []
-            self.refresh_window_list()
+            self.window_var = ttk.StringVar(value='Full Screen')
+
+            if platform.system() == 'Windows':
+                capture_frame = ttk.Frame(frame)
+                capture_frame.grid(column=0, row=2, columnspan=3, sticky=(ttk.W, ttk.E), pady=(5, 5))
+                capture_frame.columnconfigure(1, weight=1)
+
+                capture_label = ttk.Label(capture_frame, text='Capture:', bootstyle="info")
+                capture_label.grid(column=0, row=0, padx=(0, 5))
+
+                self.window_combobox = ttk.Combobox(capture_frame, textvariable=self.window_var,
+                                                    state="readonly", width=30)
+                self.window_combobox.grid(column=1, row=0, sticky=(ttk.W, ttk.E))
+                self.window_combobox.bind('<<ComboboxSelected>>', self.on_window_selected)
+
+                refresh_btn = ttk.Button(capture_frame, text='↻', bootstyle="info-outline",
+                                         command=self.refresh_window_list, width=3)
+                refresh_btn.grid(column=2, row=0, padx=(5, 0))
+
+                self.refresh_window_list()
+            else:
+                self.window_combobox = None
 
             # Entry widget
             self.entry = ttk.Entry(frame, width=38)
