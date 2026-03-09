@@ -1,194 +1,282 @@
 """
-PyInstaller build script
+Standalone build script — runs on Windows, macOS, and Linux without GitHub Actions.
 
-> python3 -m venv env
-> source env/bin/activate (env Scripts activate for Windows)
-> python3 -m pip install -r requirements.txt
-> python3 -m pip install pyinstaller
-> python3 build.py
+Usage
+-----
+    # Build the server (PyInstaller) executable for the current platform:
+    python3 build.py
 
+    # Build the Electron desktop app (requires Node.js ≥ 20):
+    python3 build.py --app-type electron
 
-Platform specific libraries that MIGHT be needed for compiling binaries
-Linux
-- sudo apt install portaudio19-dev
-- sudo apt-get install python3-tk python3-dev
+    # Build and code-sign on macOS:
+    python3 build.py --sign "Developer ID Application: Your Name (TEAMID)"
 
-MacOS
-- brew install portaudio
-- if you're using pyenv, you might also need to install tkinter manually. 
-    I followed this guide https://dev.to/xshapira/using-tkinter-with-pyenv-a-simple-two-step-guide-hh5. 
+    # Install Python and Node dependencies, then build:
+    python3 build.py --setup
 
-NOTES:
-    1. For use in future projects, note that pyinstaller will print hundreds of unrelated error messages, but to find
-        the critical error start scrolling upwards from the bottom and find the first error before it starts cleanup and
-        destroying resources. It will likely be an import or a path error.
-    2. Extra steps before using multiprocessing might be required
-        https://www.pyinstaller.org/en/stable/common-issues-and-pitfalls.html#why-is-calling-multiprocessing-freeze-support-required
-    3. Change file reads accordingly
-        https://pyinstaller.org/en/stable/runtime-information.html#placing-data-files-at-expected-locations-inside-the-bundle
-    4. Code signing for MacOS
-        https://github.com/pyinstaller/pyinstaller/wiki/Recipe-OSX-Code-Signing
-        https://developer.apple.com/library/archive/technotes/tn2206/_index.html
-        https://gist.github.com/txoof/0636835d3cc65245c6288b2374799c43
-        https://github.com/txoof/codesign
-        https://github.com/The-Nicholas-R-Barrow-Company-LLC/python3-pyinstaller-base-app-codesigning
-        https://pyinstaller.org/en/stable/feature-notes.html#macos-binary-code-signing
+Prerequisites
+-------------
+All platforms:
+    python3 -m pip install -r requirements.txt
+    python3 -m pip install pyinstaller
+
+Linux (install once with apt):
+    sudo apt-get update
+    sudo apt-get install -y python3-tk python3-dev portaudio19-dev xdg-utils libxcb-xinerama0
+
+macOS:
+    brew install portaudio
+    # If using pyenv, install Tkinter manually:
+    # https://dev.to/xshapira/using-tkinter-with-pyenv-a-simple-two-step-guide-hh5
+
+Electron builds additionally require Node.js ≥ 20 with npm.
+
+Notes
+-----
+1. PyInstaller prints many warnings; the first real error is near the bottom of the log,
+   just before the cleanup section.
+2. Code signing for macOS:
+   https://pyinstaller.org/en/stable/feature-notes.html#macos-binary-code-signing
 """
 
+import argparse
 import os
 import platform
+import shutil
+import subprocess
 import sys
-
-import PyInstaller.__main__
 
 from app.version import version
 
+# Path separator used by PyInstaller --add-data: ";" on Windows, ":" everywhere else.
+_SEP = ";" if platform.system() == "Windows" else ":"
 
-def build(signing_key=None):
-    input('Did you remember to increment version.py? ' + str(version))
-    app_name = 'Noclip\\ Desktop'
-
-    compile(signing_key)
-
-    macos = platform.system() == 'Darwin'
-    if macos and signing_key:
-        # Codesign
-        os.system(
-            f'codesign --deep --force --verbose --sign "{signing_key}" dist/{app_name}.app --options runtime')
-
-    zip_name = zip()
-
-    if macos and signing_key:
-        keychain_profile = signing_key.split('(')[0].strip()
-
-        # Notarize
-        os.system(f'xcrun notarytool submit --wait --keychain-profile "{keychain_profile}" --verbose dist/{zip_name}')
-        input(f'Check whether notarization was successful using \n\t xcrun notarytool history --keychain-profile {keychain_profile}.\nYou can check debug logs using \n\t xcrun notarytool log --keychain-profile "{keychain_profile}" <run-id>')
-
-        # Staple
-        os.system(f'xcrun stapler staple dist/{app_name}.app')
-
-        # Zip the signed, stapled file
-        zip_name = zip()
+# Human-readable name and the on-disk executable name
+_APP_NAME = "Noclip Desktop"
+_EXE_NAME = f"{_APP_NAME}.exe" if platform.system() == "Windows" else _APP_NAME
 
 
-def compile(signing_key=None):
-    # Path to your main application script
-    app_script = os.path.join('app', 'app.py')
+def setup(include_node: bool = False) -> None:
+    """Install Python (and optionally Node) dependencies."""
+    print("==> Installing Python dependencies …")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
 
-    # Common PyInstaller options
+    if platform.system() == "Linux":
+        print(
+            "\n[Linux] If the build fails, make sure the following system packages are installed:\n"
+            "  sudo apt-get update\n"
+            "  sudo apt-get install -y python3-tk python3-dev portaudio19-dev "
+            "xdg-utils libxcb-xinerama0\n"
+        )
+
+    if include_node:
+        print("==> Installing Node.js (Electron) dependencies …")
+        subprocess.check_call(["npm", "install"], cwd="electron")
+
+
+def compile_server(signing_key: str | None = None) -> None:
+    """Run PyInstaller to produce the server executable."""
+    import PyInstaller.__main__  # pylint: disable=import-outside-toplevel
+
+    app_script = os.path.join("app", "app.py")
+
     pyinstaller_options = [
-        '--clean',
-        '--noconfirm',
-
-        # Debug
-        # '--debug=all',
-
-        # --- Basics --- #
-        '--name=Noclip Desktop',
-        '--icon=app/resources/icon.png',
-        # '--onefile',  # NOTE: Might not work on Windows. Also discouraged to enable both windowed and one file on Mac.
-
-        # Where to find necessary packages to bundle (python3 -m pip show xxx)
-        '--paths=./env/lib/python3.12/site-packages',
-
-        # Packaging fails without explicitly including these modules here as shown by the logs outputted by debug=all
-        '--hidden-import=pyautogui',
-        '--hidden-import=appdirs',
-        '--hidden-import=pyparsing',
-        '--hidden-import=openai',
-
-        # pypi google_genai doesn't play nice with pyinstaller without this
-        '--hidden-import=google_genai',
-        '--hidden-import=google',
-        '--hidden-import=google.genai',
-
-        # Gradio web UI and its dependencies
-        '--hidden-import=gradio',
-        '--hidden-import=uvicorn',
-        '--collect-all=gradio',
-        '--collect-all=gradio_client',
-
+        "--clean",
+        "--noconfirm",
+        f"--name={_APP_NAME}",
+        "--icon=app/resources/icon.png",
+        "--onefile",
+        # Hidden imports required for successful packaging
+        "--hidden-import=pyautogui",
+        "--hidden-import=appdirs",
+        "--hidden-import=pyparsing",
+        "--hidden-import=openai",
+        # google-genai doesn't play nice with PyInstaller without these
+        "--hidden-import=google_genai",
+        "--hidden-import=google",
+        "--hidden-import=google.genai",
+        # Gradio web UI
+        "--hidden-import=gradio",
+        "--hidden-import=uvicorn",
+        "--collect-all=gradio",
+        "--collect-all=gradio_client",
         # Additional LLM providers
-        '--hidden-import=anthropic',
-
+        "--hidden-import=anthropic",
         # Multi-monitor detection
-        '--hidden-import=screeninfo',
-
-        # Static files and resources --add-data=src:dest
-        # - File reads change accordingly - https://pyinstaller.org/en/stable/runtime-information.html#placing-data-files-at-expected-locations-inside-the-bundle
-        '--add-data=app/resources/*:resources',
-
-        # Manually including source code and submodules because app doesn't launch without it
-        '--add-data=app/*.py:.',
-        '--add-data=app/utils/*.py:utils',  # Submodules need to be included manually
-        '--add-data=app/models/*.py:models',  # Submodules need to be included manually
-
-        app_script
+        "--hidden-import=screeninfo",
+        # Static files and source modules bundled into the executable
+        # https://pyinstaller.org/en/stable/runtime-information.html
+        f"--add-data=app/resources/*{_SEP}resources",
+        f"--add-data=app/*.py{_SEP}.",
+        f"--add-data=app/utils/*.py{_SEP}utils",
+        f"--add-data=app/models/*.py{_SEP}models",
+        app_script,
     ]
 
-    # Platform-specific options
-    if platform.system() == 'Darwin':  # MacOS
-        if signing_key:
-            pyinstaller_options.extend([
-                f'--codesign-identity={signing_key}'
-            ])
-            # Apple Notarization has a problem because this binary used in speech_recognition is signed with too old an SDK
-            # from PyInstaller.utils.osx import set_macos_sdk_version
-            # set_macos_sdk_version('env/lib/python3.12/site-packages/speech_recognition/flac-mac', 10, 9, 0) # NOTE: Change the path according to where your binary is located
-    elif platform.system() == 'Linux':
-        pyinstaller_options.extend([
-            '--hidden-import=PIL._tkinter_finder',
-            '--onefile'
-        ])
-    elif platform.system() == 'Windows':
-        pyinstaller_options.extend([
-            '--onefile'
-        ])
+    if platform.system() == "Darwin" and signing_key:
+        pyinstaller_options.append(f"--codesign-identity={signing_key}")
+        # Note: Apple Notarization may fail for binaries signed with an old SDK.
+        # See: https://pyinstaller.org/en/stable/feature-notes.html#macos-binary-code-signing
+    elif platform.system() == "Linux":
+        pyinstaller_options.append("--hidden-import=PIL._tkinter_finder")
 
-    # Run PyInstaller with the specified options
     PyInstaller.__main__.run(pyinstaller_options)
-    print('Done. Check dist/ for executables.')
+    print(f"==> Server executable written to dist/{_EXE_NAME}")
 
 
-def zip():
-    # Zip the app
-    print('Zipping the executables')
-    app_name = 'Noclip\\ Desktop'
+def build_electron() -> None:
+    """
+    Build the Electron desktop app wrapper around the server executable.
 
-    zip_name = 'Noclip-Desktop-v' + str(version)
-    if platform.system() == 'Darwin':  # MacOS
-        if platform.processor() == 'arm':
-            zip_name = zip_name + '-MacOS-M-Series' + '.zip'
-        else:
-            zip_name = zip_name + '-MacOS-Intel' + '.zip'
+    Requires:
+    - The server executable already built in dist/
+    - Node.js ≥ 20 with npm available on PATH
+    """
+    server_bundle_dir = os.path.join("dist", "noclip-desktop-server")
+    os.makedirs(server_bundle_dir, exist_ok=True)
+    shutil.copy(os.path.join("dist", _EXE_NAME), server_bundle_dir)
+    print(f"==> Copied server binary to {server_bundle_dir}/")
 
-        # Special zip command for macos to keep the complex directory metadata intact to keep the codesigning valid 
-        zip_cli_command = 'cd dist/; ditto -c -k --sequesterRsrc --keepParent ' + app_name + '.app ' + zip_name
-    elif platform.system() == 'Linux':
-        zip_name = zip_name + '-Linux.zip'
-        zip_cli_command = 'cd dist/; zip -r9 ' + zip_name + ' ' + app_name
-    elif platform.system() == 'Windows':
-        zip_name = zip_name + '-Windows.zip'
-        zip_cli_command = 'cd dist & powershell Compress-Archive -Path \'Noclip Desktop.exe\' -DestinationPath ' + zip_name
+    print("==> Installing Electron npm dependencies …")
+    subprocess.check_call(["npm", "install"], cwd="electron")
 
-    # input(f'zip_cli_command - {zip_cli_command} \nExecute?')
-    os.system(zip_cli_command)
+    system = platform.system()
+    if system == "Windows":
+        builder_flag = "--win"
+    elif system == "Darwin":
+        builder_flag = "--mac"
+    else:
+        builder_flag = "--linux"
+
+    print(f"==> Building Electron app ({system}) …")
+    subprocess.check_call(["npx", "electron-builder", builder_flag], cwd="electron")
+    print("==> Electron app written to electron/dist/")
+
+
+def codesign_macos(signing_key: str) -> None:
+    """Deep-sign the macOS .app bundle."""
+    app_path = f"dist/{_APP_NAME}.app"
+    subprocess.check_call([
+        "codesign", "--deep", "--force", "--verbose",
+        "--sign", signing_key, app_path, "--options", "runtime",
+    ])
+
+
+def notarize_macos(signing_key: str, zip_path: str) -> None:
+    """Submit the zip to Apple notarization and staple on success."""
+    keychain_profile = signing_key.split("(")[0].strip()
+    subprocess.check_call([
+        "xcrun", "notarytool", "submit", "--wait",
+        "--keychain-profile", keychain_profile, "--verbose", zip_path,
+    ])
+    input(
+        f"Check notarization status with:\n"
+        f"  xcrun notarytool history --keychain-profile {keychain_profile}\n"
+        f"Then press Enter to staple …"
+    )
+    subprocess.check_call(["xcrun", "stapler", "staple", f"dist/{_APP_NAME}.app"])
+
+
+def create_zip() -> str:
+    """Zip the built artifact and return the zip filename."""
+    print("==> Creating release zip …")
+    base = f"Noclip-Desktop-v{version}"
+
+    system = platform.system()
+    if system == "Darwin":
+        suffix = "MacOS-M-Series" if platform.processor() == "arm" else "MacOS-Intel"
+        zip_name = f"{base}-{suffix}.zip"
+        subprocess.check_call([
+            "ditto", "-c", "-k", "--sequesterRsrc", "--keepParent",
+            f"{_APP_NAME}.app", zip_name,
+        ], cwd="dist")
+    elif system == "Linux":
+        zip_name = f"{base}-Linux.zip"
+        subprocess.check_call(["zip", "-r9", zip_name, _APP_NAME], cwd="dist")
+    elif system == "Windows":
+        zip_name = f"{base}-Windows.zip"
+        subprocess.check_call([
+            "powershell", "Compress-Archive",
+            "-Path", f"{_APP_NAME}.exe",
+            "-DestinationPath", zip_name,
+        ], cwd="dist")
+    else:
+        raise RuntimeError(f"Unsupported platform: {system}")
+
+    print(f"==> Release archive: dist/{zip_name}")
     return zip_name
 
 
-def setup():
-    # Update the venv with any new updates
-    os.system("pip install -r requirements.txt")
+def build(app_type: str = "server", signing_key: str | None = None, release: bool = False) -> None:
+    """
+    Full build pipeline.
+
+    Parameters
+    ----------
+    app_type:   "server"   — PyInstaller executable only (default)
+                "electron" — PyInstaller executable + Electron wrapper
+    signing_key: macOS Developer ID for code-signing (optional)
+    release:    When True, also produce a zip archive suitable for distribution
+    """
+    compile_server(signing_key)
+
+    macos = platform.system() == "Darwin"
+    if macos and signing_key:
+        codesign_macos(signing_key)
+
+    if app_type == "electron":
+        build_electron()
+
+    if release:
+        zip_path = create_zip()
+
+        if macos and signing_key:
+            notarize_macos(signing_key, os.path.join("dist", zip_path))
+            # Re-zip after stapling
+            create_zip()
 
 
-if __name__ == '__main__':
-    apple_code_signing_key = None
-    if len(sys.argv) > 1:
-        apple_code_signing_key = sys.argv[1]  # python3 build.py "Developer ID Application: ... (...)"
-        print("apple_code_signing_key: ", apple_code_signing_key)
-    elif len(sys.argv) == 1 and platform.system() == 'Darwin':
-        input("Are you sure you don't wanna sign your code? ")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Build Noclip Desktop for the current platform.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  python3 build.py\n"
+            "  python3 build.py --app-type electron\n"
+            '  python3 build.py --sign "Developer ID Application: My Name (TEAM)"\n'
+            "  python3 build.py --release\n"
+            "  python3 build.py --setup --app-type electron\n"
+        ),
+    )
+    parser.add_argument(
+        "--app-type",
+        choices=["server", "electron"],
+        default="server",
+        help="Build the PyInstaller server executable only (default) or add the Electron wrapper.",
+    )
+    parser.add_argument(
+        "--sign",
+        metavar="SIGNING_KEY",
+        default=None,
+        help="macOS Developer ID Application signing identity (e.g. 'Developer ID Application: Name (ID)').",
+    )
+    parser.add_argument(
+        "--release",
+        action="store_true",
+        help="Also produce a zip archive for distribution (and run notarization on macOS when --sign is provided).",
+    )
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Install Python and (for --app-type electron) Node.js dependencies before building.",
+    )
 
-    setup()
-    build(apple_code_signing_key)
+    args = parser.parse_args()
+
+    if args.setup:
+        setup(include_node=args.app_type == "electron")
+
+    build(app_type=args.app_type, signing_key=args.sign, release=args.release)
