@@ -30,6 +30,7 @@ jobs:
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
 
     strategy:
+      fail-fast: false
       matrix:
         python-version: ['3.12']
 
@@ -66,7 +67,7 @@ jobs:
       # ── Mock-only benchmarks (always run) ──
       - name: Run unit tests and benchmarks (mocked)
         run: |
-          pytest tests/ -v --tb=short -x 2>&1 | tee benchmark-results.txt
+          pytest tests/ -v --tb=short --ignore=tests/simple_test.py 2>&1 | tee benchmark-results.txt
 
       # ── Real Ollama benchmarks (opt-in) ──
       - name: Install and start Ollama
@@ -89,7 +90,7 @@ jobs:
           OLLAMA_ENDPOINT: http://localhost:11434
           OLLAMA_MODELS: ${{ github.event.inputs.ollama_models }}
         run: |
-          pytest tests/ -v --tb=short -x 2>&1 | tee -a benchmark-results.txt
+          pytest tests/ -v --tb=short --ignore=tests/simple_test.py 2>&1 | tee -a benchmark-results.txt
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
