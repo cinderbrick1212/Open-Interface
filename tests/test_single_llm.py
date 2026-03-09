@@ -55,7 +55,7 @@ class TestSingleLLMSettings:
         s = Settings()
         s.save_settings_to_file({'provider': 'Ollama', 'model': 'llama3.2'})
         loaded = Settings().get_dict()
-        assert loaded.get('ollama_endpoint') is None  # LLM.py applies default
+        assert loaded.get('ollama_endpoint') is None  # llm.py applies default
 
 
 class TestSingleLLMProviderRouting:

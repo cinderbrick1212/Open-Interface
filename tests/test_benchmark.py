@@ -240,6 +240,8 @@ class TestOllamaIntegrationBenchmark:
     Set OLLAMA_MODEL to override the default model (llama3.2).
     """
 
+    MAX_RESPONSE_TIME_SECONDS = 120
+
     @pytest.fixture
     def ollama_model(self, mock_screen):
         endpoint = os.environ['OLLAMA_ENDPOINT']
@@ -259,4 +261,5 @@ class TestOllamaIntegrationBenchmark:
             )
         print(f'\n  Real Ollama response: {t.elapsed:.2f} s')
         # Just informational — no strict assertion on real LLM latency
-        assert t.elapsed < 120, 'Ollama response took over 2 minutes'
+        assert t.elapsed < self.MAX_RESPONSE_TIME_SECONDS, \
+            f'Ollama response took over {self.MAX_RESPONSE_TIME_SECONDS}s'
