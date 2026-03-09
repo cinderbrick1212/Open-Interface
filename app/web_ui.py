@@ -22,6 +22,7 @@ from typing import Optional
 import gradio as gr
 
 from version import version
+from utils.window_selector import get_capture_choices
 
 # ── Constants ────────────────────────────────────────────────────────
 PROVIDERS = ['OpenAI', 'Gemini', 'Claude', 'OpenRouter', 'Ollama']
@@ -57,6 +58,8 @@ class WebUI:
     def __init__(self, core=None):
         self._core = core
         self._stop_event = threading.Event()
+        # Map capture labels → rects; populated at UI build time
+        self._capture_map: dict[str, Optional[tuple[int, int, int, int]]] = {}
         self.demo = self._build_ui()
 
     # ── Core (lazy) ──────────────────────────────────────────────────
@@ -123,6 +126,9 @@ class WebUI:
                             '⏹ Stop', variant='stop', scale=1,
                         )
 
+                    # ── Capture region selector ──────────────────────
+                    self._build_capture_selector()
+
                 # ─── Settings Tab ────────────────────────────────────
                 with gr.Tab("⚙️ Settings"):
                     accordions = self._build_settings_tab(sd)
@@ -141,6 +147,123 @@ class WebUI:
             stop_btn.click(fn=self._handle_stop)
 
         return demo
+
+    # ── Capture region selector ──────────────────────────────────────
+
+    def _build_capture_selector(self):
+        """Build the 'Choose what to share' capture region picker."""
+
+        labels, self._capture_map = get_capture_choices()
+
+        # Separate screen vs window labels
+        screen_labels = [l for l in labels if l.startswith("🖥️")]
+        window_labels = [l for l in labels if l.startswith("🪟")]
+
+        with gr.Accordion("🖥️ Choose what to capture", open=False):
+            with gr.Tabs():
+                with gr.Tab("Entire Screen"):
+                    screen_radio = gr.Radio(
+                        choices=screen_labels,
+                        value=screen_labels[0] if screen_labels else None,
+                        label='Select a screen',
+                        info='Choose which screen to capture',
+                    )
+                    for lbl in screen_labels:
+                        rect = self._capture_map.get(lbl)
+                        if rect:
+                            gr.Markdown(
+                                f"&nbsp;&nbsp;&nbsp;**{lbl}** — "
+                                f"Position: ({rect[0]}, {rect[1]}), "
+                                f"Size: {rect[2]}×{rect[3]}",
+                            )
+
+                with gr.Tab("Window"):
+                    if window_labels:
+                        window_radio = gr.Radio(
+                            choices=window_labels,
+                            value=None,
+                            label='Select a window',
+                            info='Choose an application window to capture '
+                                 '(Windows only)',
+                        )
+                    else:
+                        window_radio = gr.Radio(
+                            choices=['No windows detected'],
+                            value=None,
+                            label='Select a window',
+                            info='Window enumeration requires Windows OS. '
+                                 'Use "Entire Screen" on other platforms.',
+                            interactive=False,
+                        )
+
+            with gr.Row():
+                refresh_btn = gr.Button(
+                    "🔄 Refresh", size='sm',
+                )
+                share_btn = gr.Button(
+                    "✅ Share", variant='primary', size='sm',
+                )
+                capture_status = gr.Markdown("")
+
+            # ── Event wiring ─────────────────────────────────────
+            share_btn.click(
+                fn=self._apply_capture_selection,
+                inputs=[screen_radio, window_radio],
+                outputs=capture_status,
+            )
+            refresh_btn.click(
+                fn=self._refresh_capture_choices,
+                outputs=[screen_radio, window_radio],
+            )
+
+    def _apply_capture_selection(self, screen_sel, window_sel):
+        """Apply the selected capture region to Core."""
+        # Window selection takes priority if set
+        selection = window_sel if (window_sel and not window_sel.startswith("No windows")) else screen_sel
+
+        if not selection:
+            return "⚠️ No selection made"
+
+        rect = self._capture_map.get(selection)
+
+        try:
+            core = self.core
+            core.set_capture_region(rect)
+        except Exception as exc:
+            return f"❌ Error: {exc}"
+
+        if rect is None:
+            return f"✅ Capturing: **Full Screen**"
+        return (
+            f"✅ Capturing: **{selection}**\n\n"
+            f"Region: ({rect[0]}, {rect[1]}) — {rect[2]}×{rect[3]}"
+        )
+
+    def _refresh_capture_choices(self):
+        """Re-enumerate screens and windows."""
+        labels, self._capture_map = get_capture_choices()
+        screen_labels = [l for l in labels if l.startswith("🖥️")]
+        window_labels = [l for l in labels if l.startswith("🪟")]
+
+        screen_update = gr.update(
+            choices=screen_labels,
+            value=screen_labels[0] if screen_labels else None,
+        )
+
+        if window_labels:
+            window_update = gr.update(
+                choices=window_labels,
+                value=None,
+                interactive=True,
+            )
+        else:
+            window_update = gr.update(
+                choices=['No windows detected'],
+                value=None,
+                interactive=False,
+            )
+
+        return screen_update, window_update
 
     # ── Settings panel ───────────────────────────────────────────────
 

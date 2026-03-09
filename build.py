@@ -87,7 +87,6 @@ def compile(signing_key=None):
         # --- Basics --- #
         '--name=Open Interface',
         '--icon=app/resources/icon.png',
-        '--windowed',  # Remove this if your application is a console program, also helps to remove this while debugging
         # '--onefile',  # NOTE: Might not work on Windows. Also discouraged to enable both windowed and one file on Mac.
 
         # Where to find necessary packages to bundle (python3 -m pip show xxx)
@@ -97,7 +96,6 @@ def compile(signing_key=None):
         '--hidden-import=pyautogui',
         '--hidden-import=appdirs',
         '--hidden-import=pyparsing',
-        '--hidden-import=ttkbootstrap',
         '--hidden-import=openai',
 
         # pypi google_genai doesn't play nice with pyinstaller without this
@@ -105,10 +103,17 @@ def compile(signing_key=None):
         '--hidden-import=google',
         '--hidden-import=google.genai',
 
-        # NOTE: speech_recognition is the name of the directory that this package is in within ../site-packages/,
-        # whereas the pypi name is SpeechRecognition (pip install SpeechRecognition).
-        # This was hard to pin down and took a long time to debug.
-        # '--hidden-import=speech_recognition',
+        # Gradio web UI and its dependencies
+        '--hidden-import=gradio',
+        '--hidden-import=uvicorn',
+        '--collect-all=gradio',
+        '--collect-all=gradio_client',
+
+        # Additional LLM providers
+        '--hidden-import=anthropic',
+
+        # Multi-monitor detection
+        '--hidden-import=screeninfo',
 
         # Static files and resources --add-data=src:dest
         # - File reads change accordingly - https://pyinstaller.org/en/stable/runtime-information.html#placing-data-files-at-expected-locations-inside-the-bundle
