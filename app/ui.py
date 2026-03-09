@@ -253,13 +253,13 @@ class UI:
             link_label = ttk.Label(self, text='Setup Instructions', bootstyle="primary")
             link_label.pack()
             link_label.bind('<Button-1>', lambda e: open_link(
-                'https://github.com/AmberSahdev/Open-Interface?tab=readme-ov-file#setup-%EF%B8%8F'))
+                'https://github.com/cinderbrick1212/Noclip-Desktop?tab=readme-ov-file#setup-%EF%B8%8F'))
 
             # Check for updates Label
             update_label = ttk.Label(self, text='Check for Updates', bootstyle="primary")
             update_label.pack()
             update_label.bind('<Button-1>', lambda e: open_link(
-                'https://github.com/AmberSahdev/Open-Interface/releases/latest'))
+                'https://github.com/cinderbrick1212/Noclip-Desktop/releases/latest'))
 
             # Version Label
             version_label = ttk.Label(self, text=f'Version: {str(version)}', font=('Helvetica', 10))
@@ -299,9 +299,9 @@ class UI:
             try:
                 super().__init__(themename=theme)
             except:
-                super().__init__()  # https://github.com/AmberSahdev/Open-Interface/issues/35
+                super().__init__()  # https://github.com/cinderbrick1212/Noclip-Desktop/issues/35
 
-            self.title('Open Interface')
+            self.title('Noclip Desktop')
             window_width = 450
             window_height = 270
             self.minsize(window_width, window_height)

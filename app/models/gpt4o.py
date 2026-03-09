@@ -13,9 +13,9 @@ class GPT4o(Model):
     def __init__(self, model_name, base_url, api_key, context, screen=None):
         super().__init__(model_name, base_url, api_key, context, screen)
 
-        # GPT4o has Assistant Mode enabled that we can utilize to make Open Interface be more contextually aware
+        # GPT4o has Assistant Mode enabled that we can utilize to make Noclip Desktop be more contextually aware
         self.assistant = self.client.beta.assistants.create(
-            name='Open Interface Backend',
+            name='Noclip Desktop Backend',
             instructions=self.context,
             model=model_name,
             # tools=[],

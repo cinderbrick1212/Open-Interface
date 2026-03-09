@@ -8,6 +8,6 @@
 
 const { contextBridge } = require('electron');
 
-contextBridge.exposeInMainWorld('openInterface', {
+contextBridge.exposeInMainWorld('noclipDesktop', {
   platform: process.platform,
 });

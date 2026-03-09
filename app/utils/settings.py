@@ -21,7 +21,7 @@ class Settings:
         self.settings = self.load_settings_from_file()
 
     def get_settings_directory_path(self):
-        return str(Path.home()) + '/.open-interface/'
+        return str(Path.home()) + '/.noclip-desktop/'
 
     def get_dict(self) -> dict[str, str]:
         return self.settings

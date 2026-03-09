@@ -70,7 +70,7 @@ class MoondreamHybrid(Model):
                   Gemini Flash
                   (video input)
 
-    Settings (in ~/.open-interface/settings.json):
+    Settings (in ~/.noclip-desktop/settings.json):
         moondream_api_key      – API key for Moondream Cloud (optional).
         moondream_endpoint     – Local Moondream Station URL
                                  (default: http://localhost:2020/v1).

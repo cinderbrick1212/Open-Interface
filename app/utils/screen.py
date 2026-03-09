@@ -99,7 +99,7 @@ class Screen:
             return tmpfile.name
 
     def get_screenshot_file(self):
-        # Gonna always keep a screenshot.jpg in ~/.open-interface/ because file objects, temp files, every other way has an error
+        # Gonna always keep a screenshot.jpg in ~/.noclip-desktop/ because file objects, temp files, every other way has an error
         filename = 'screenshot.jpg'
         filepath = os.path.join(Settings().get_settings_directory_path(), filename)
         img = self.get_screenshot()
