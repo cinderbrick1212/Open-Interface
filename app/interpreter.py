@@ -15,6 +15,8 @@ class Interpreter:
         self.cell_map: dict[str, tuple[int, int]] = {}
         # pyautogui sometimes ignores the first call; warm up once on first use
         self._warmed_up = False
+        # When False, pyautogui commands are logged but not executed
+        self.controls_enabled = True
 
     def process_commands(self, json_commands: list[dict[str, Any]]) -> bool:
         """
@@ -63,6 +65,18 @@ class Interpreter:
         if function_name.startswith('pyautogui.'):
             function_name = function_name.split('.')[-1]
 
+        # Allow sleep even when controls are disabled
+        if function_name == "sleep" and parameters.get("secs"):
+            sleep(parameters.get("secs"))
+            return
+
+        # Skip keyboard/mouse commands when controls are disabled
+        if not self.controls_enabled:
+            if function_name == 'click_cell' or hasattr(pyautogui, function_name):
+                print(f'[Controls disabled] Skipped: {function_name}({parameters})')
+                self.status_queue.put(f'🔒 Skipped (controls off): {function_name}')
+                return
+
         # Handle click_cell: translate cell name to screen coordinates and click
         if function_name == 'click_cell':
             cell = parameters.get('cell', '').upper()
@@ -80,9 +94,7 @@ class Interpreter:
             pyautogui.press("command", interval=0.2)
             self._warmed_up = True
 
-        if function_name == "sleep" and parameters.get("secs"):
-            sleep(parameters.get("secs"))
-        elif hasattr(pyautogui, function_name):
+        if hasattr(pyautogui, function_name):
             # Execute the corresponding pyautogui function i.e. Keyboard or Mouse commands.
             function_to_call = getattr(pyautogui, function_name)
 

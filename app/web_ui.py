@@ -17,6 +17,7 @@ the chatbot via Gradio's generator protocol.
 
 import queue
 import threading
+from pathlib import Path
 from typing import Optional
 
 import gradio as gr
@@ -31,6 +32,7 @@ RETENTION_POLICIES = [
     'Delete immediately', 'Keep 1 day', 'Keep 30 days', 'Keep forever',
 ]
 BROWSERS = ['', 'Chrome', 'Firefox', 'Safari', 'Edge']
+VOICE_TRANSCRIPTION_MODEL = 'gemini-2.0-flash'
 
 # Keywords used by the settings search filter (one list per accordion).
 _SEARCH_KEYWORDS: list[list[str]] = [
@@ -58,6 +60,7 @@ class WebUI:
     def __init__(self, core=None):
         self._core = core
         self._stop_event = threading.Event()
+        self._controls_enabled = True
         # Map capture labels → rects; populated at UI build time
         self._capture_map: dict[str, Optional[tuple[int, int, int, int]]] = {}
         self.demo = self._build_ui()
@@ -70,6 +73,7 @@ class WebUI:
         if self._core is None:
             from core import Core
             self._core = Core()
+            self._core.set_controls_enabled(self._controls_enabled)
         return self._core
 
     # ── Public API ───────────────────────────────────────────────────
@@ -126,6 +130,42 @@ class WebUI:
                             '⏹ Stop', variant='stop', scale=1,
                         )
 
+                    with gr.Row():
+                        controls_cb = gr.Checkbox(
+                            value=True,
+                            label='🖱️ Keyboard & Mouse control enabled',
+                            info='When off, commands are logged but not '
+                                 'executed on your system',
+                            scale=4,
+                        )
+                        clear_btn = gr.Button(
+                            '🗑️ Clear Chat', size='sm', scale=1,
+                        )
+
+                    # ── Voice input ──────────────────────────────────
+                    with gr.Accordion(
+                        "🎤 Voice Input", open=False,
+                    ):
+                        gr.Markdown(
+                            "Record a voice message and it will be "
+                            "transcribed using Gemini, then sent as "
+                            "a chat message.\n\n"
+                            "💡 *To use system audio as input, select "
+                            "a virtual audio device (e.g. BlackHole, "
+                            "Stereo Mix, PulseAudio Monitor) in your "
+                            "browser's microphone settings.*"
+                        )
+                        audio_input = gr.Audio(
+                            sources=["microphone"],
+                            type="filepath",
+                            label="Record or upload audio",
+                        )
+                        transcribe_btn = gr.Button(
+                            "📝 Transcribe & Send", variant='primary',
+                            size='sm',
+                        )
+                        voice_status = gr.Markdown("")
+
                     # ── Capture region selector ──────────────────────
                     self._build_capture_selector()
 
@@ -145,6 +185,19 @@ class WebUI:
                 outputs=[chatbot, msg],
             )
             stop_btn.click(fn=self._handle_stop)
+            controls_cb.change(
+                fn=self._toggle_controls,
+                inputs=controls_cb,
+            )
+            clear_btn.click(
+                fn=lambda: ([], ""),
+                outputs=[chatbot, msg],
+            )
+            transcribe_btn.click(
+                fn=self._transcribe_and_send,
+                inputs=[audio_input, chatbot],
+                outputs=[chatbot, msg, voice_status, audio_input],
+            )
 
         return demo
 
@@ -551,6 +604,128 @@ class WebUI:
         self._stop_event.set()
         if self._core is not None:
             self._core.stop_previous_request()
+
+    # ── Controls toggle ──────────────────────────────────────────────
+
+    def _toggle_controls(self, enabled: bool):
+        """Enable or disable keyboard/mouse control execution."""
+        self._controls_enabled = enabled
+        if self._core is not None:
+            self._core.set_controls_enabled(enabled)
+
+    # ── Voice transcription ──────────────────────────────────────────
+
+    def _transcribe_and_send(self, audio_path, history):
+        """Transcribe recorded audio via Gemini and send as a chat message."""
+        if not audio_path:
+            return history or [], "", "⚠️ No audio recorded", None
+
+        try:
+            transcription = self._transcribe_audio(audio_path)
+        except Exception as exc:
+            return history or [], "", f"❌ Transcription error: {exc}", None
+
+        if not transcription or not transcription.strip():
+            return history or [], "", "⚠️ No speech detected", None
+
+        # Feed the transcription through the normal chat flow
+        history = list(history or [])
+        history.append({"role": "user", "content": f"🎤 {transcription}"})
+        history.append({
+            "role": "assistant", "content": "🔄 Processing…",
+        })
+
+        try:
+            core = self.core
+        except Exception as exc:
+            history[-1] = {
+                "role": "assistant",
+                "content": f"❌ Initialisation error: {exc}",
+            }
+            return history, "", f"✅ Transcribed: {transcription}", None
+
+        self._stop_event.clear()
+
+        thread = threading.Thread(
+            target=core.execute_user_request,
+            args=(transcription,),
+            daemon=True,
+        )
+        thread.start()
+
+        updates: list[str] = []
+        while thread.is_alive():
+            if self._stop_event.is_set():
+                updates.append("⏹ Stopped by user")
+                break
+            try:
+                status = core.status_queue.get(timeout=0.3)
+                updates.append(str(status))
+            except queue.Empty:
+                continue
+
+        # Drain remaining messages
+        while True:
+            try:
+                status = core.status_queue.get_nowait()
+                updates.append(str(status))
+            except queue.Empty:
+                break
+
+        if updates:
+            history[-1] = {
+                "role": "assistant",
+                "content": "\n".join(updates),
+            }
+        else:
+            history[-1] = {"role": "assistant", "content": "✅ Done"}
+
+        return history, "", f"✅ Transcribed: {transcription}", None
+
+    def _transcribe_audio(self, audio_path: str) -> str:
+        """Use Gemini to transcribe an audio file to text."""
+        import base64
+        from google import genai
+        from google.genai import types
+        from utils.settings import Settings
+
+        sd = Settings().get_dict()
+        api_key = sd.get('gemini_api_key', '')
+        if not api_key:
+            raise ValueError(
+                "Gemini API key is required for voice transcription. "
+                "Set it in Settings → API Keys."
+            )
+
+        client = genai.Client(api_key=api_key)
+
+        audio_file = Path(audio_path)
+        audio_bytes = audio_file.read_bytes()
+
+        # Determine MIME type from extension
+        ext = audio_file.suffix.lower()
+        mime_map = {
+            '.wav': 'audio/wav',
+            '.mp3': 'audio/mp3',
+            '.ogg': 'audio/ogg',
+            '.webm': 'audio/webm',
+            '.m4a': 'audio/mp4',
+            '.flac': 'audio/flac',
+        }
+        mime_type = mime_map.get(ext, 'audio/wav')
+
+        response = client.models.generate_content(
+            model=VOICE_TRANSCRIPTION_MODEL,
+            contents=[
+                types.Part.from_bytes(
+                    data=audio_bytes,
+                    mime_type=mime_type,
+                ),
+                "Transcribe this audio exactly as spoken. "
+                "Output only the transcription text, nothing else.",
+            ],
+        )
+        return response.text.strip()
 
     # ── Save settings ────────────────────────────────────────────────
 

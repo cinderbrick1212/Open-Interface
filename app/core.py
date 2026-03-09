@@ -33,6 +33,10 @@ class Core:
         """Set the screen capture region. None means full screen."""
         self.screen.set_capture_region(region)
 
+    def set_controls_enabled(self, enabled: bool) -> None:
+        """Enable or disable keyboard/mouse command execution."""
+        self.interpreter.controls_enabled = enabled
+
     def execute_user_request(self, user_request: str) -> None:
         self.stop_previous_request()
         time.sleep(0.1)
