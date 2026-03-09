@@ -96,6 +96,9 @@ class TestModelFactoryBenchmark:
         ('Ollama', 'llama3.2'),
         ('Ollama', 'mistral'),
         ('OpenRouter', 'meta-llama/llama-3-70b'),
+        ('Ollama', 'qwen3-vl:30b'),
+        ('Ollama', 'deepseek-coder-v2:16b'),
+        ('Ollama', 'llama3.1:8b-instruct-q4_K_M'),
     ])
     def test_chat_completions_model_creation(self, provider, model_name, mock_screen):
         """ChatCompletionsModel creation should be fast (< 200 ms)."""

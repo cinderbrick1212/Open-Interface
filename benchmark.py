@@ -14,6 +14,13 @@ Optional arguments:
         requested models and run the integration benchmark suite in addition to
         the always-on mock benchmarks.
 
+        The following models are recommended for CPU-heavy environments because
+        they run efficiently with llama.cpp / Ollama without a GPU:
+
+            qwen3-vl:30b
+            deepseek-coder-v2:16b
+            llama3.1:8b-instruct-q4_K_M
+
     --ollama-endpoint http://localhost:11434
         Base URL of an already-running Ollama instance.  Skips the install /
         start steps and jumps straight to the real-model benchmarks.
@@ -34,7 +41,10 @@ Examples::
     # Real Ollama benchmarks with a locally running instance
     OLLAMA_ENDPOINT=http://localhost:11434 python benchmark.py
 
-    # Let the script install Ollama and pull models (Linux only)
+    # Let the script install Ollama and pull the recommended CPU-optimized models (Linux only)
+    python benchmark.py --ollama-models qwen3-vl:30b,deepseek-coder-v2:16b,llama3.1:8b-instruct-q4_K_M
+
+    # Benchmark with classic models (Linux only)
     python benchmark.py --ollama-models llama3.2,mistral
 """
 
@@ -47,6 +57,14 @@ import sys
 import time
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# CPU-optimized Ollama models that work well with llama.cpp on CPU-heavy environments.
+# These are used as the default when --ollama-models is not specified but OLLAMA_MODELS is unset.
+_CPU_OPTIMIZED_MODELS = [
+    'qwen3-vl:30b',
+    'deepseek-coder-v2:16b',
+    'llama3.1:8b-instruct-q4_K_M',
+]
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -180,7 +198,10 @@ def parse_args() -> argparse.Namespace:
         '--ollama-models',
         metavar='MODEL[,MODEL...]',
         default=os.environ.get('OLLAMA_MODELS', ''),
-        help='Comma-separated Ollama models to benchmark (enables real-LLM tests)',
+        help=(
+            'Comma-separated Ollama models to benchmark (enables real-LLM tests). '
+            f'Recommended CPU-optimized models: {", ".join(_CPU_OPTIMIZED_MODELS)}'
+        ),
     )
     parser.add_argument(
         '--ollama-endpoint',

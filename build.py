@@ -59,17 +59,20 @@ _EXE_NAME = f"{_APP_NAME}.exe" if platform.system() == "Windows" else _APP_NAME
 
 def setup(include_node: bool = False) -> None:
     """Install Python (and optionally Node) dependencies."""
+    # Install OS-level system packages first (Linux only via apt-get)
+    if platform.system() == "Linux" and shutil.which("apt-get"):
+        print("==> Installing Linux system packages …")
+        subprocess.check_call(["sudo", "apt-get", "update", "-qq"])
+        subprocess.check_call([
+            "sudo", "apt-get", "install", "-y",
+            "python3-tk", "python3-dev", "portaudio19-dev",
+            "xdg-utils", "libxcb-xinerama0",
+        ])
+
     print("==> Installing Python dependencies …")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
     subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
-
-    if platform.system() == "Linux":
-        print(
-            "\n[Linux] If the build fails, make sure the following system packages are installed:\n"
-            "  sudo apt-get update\n"
-            "  sudo apt-get install -y python3-tk python3-dev portaudio19-dev "
-            "xdg-utils libxcb-xinerama0\n"
-        )
 
     if include_node:
         print("==> Installing Node.js (Electron) dependencies …")
