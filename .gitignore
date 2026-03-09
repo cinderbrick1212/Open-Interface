@@ -27,5 +27,9 @@ build/
 .eggs/
 *.spec
 
+# Node / Electron
+node_modules/
+electron/dist/
+
 # IDE
 .idea/

@@ -8,6 +8,22 @@ from PIL import Image, ImageDraw, ImageFont
 CELL_SIZE = 24
 LABEL_MARGIN = 20  # pixels reserved for row/column labels on the border
 
+# Cache the font at module level so it is loaded from disk only once.
+_cached_font = None
+
+
+def _get_font():
+    global _cached_font
+    if _cached_font is None:
+        try:
+            _cached_font = ImageFont.truetype("arial.ttf", 9)
+        except (OSError, IOError):
+            try:
+                _cached_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 9)
+            except (OSError, IOError):
+                _cached_font = ImageFont.load_default()
+    return _cached_font
+
 
 def _col_label(index: int) -> str:
     """Convert 0-based column index to Excel-style letter label (A, B, ..., Z, AA, AB, ...)."""
@@ -62,15 +78,7 @@ def draw_grid_overlay(img: Image.Image, cell_size: int = CELL_SIZE) -> Image.Ima
     result.paste(img, (LABEL_MARGIN, LABEL_MARGIN))
 
     draw = ImageDraw.Draw(result)
-
-    # Try to use a small font; fall back to default
-    try:
-        font = ImageFont.truetype("arial.ttf", 9)
-    except (OSError, IOError):
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 9)
-        except (OSError, IOError):
-            font = ImageFont.load_default()
+    font = _get_font()
 
     # Draw vertical grid lines and column labels
     for c in range(cols + 1):
@@ -114,9 +122,17 @@ def create_gridded_screenshot(img: Image.Image, region: tuple[int, int, int, int
 
 
 def gridded_screenshot_to_base64(gridded_img: Image.Image) -> str:
-    """Convert a PIL Image to a base64-encoded PNG string."""
+    """Convert a PIL Image to a base64-encoded JPEG string.
+
+    Uses JPEG with quality=72 instead of lossless PNG to significantly reduce
+    payload size and speed up API uploads with negligible quality loss for LLM
+    vision tasks.
+    """
     buf = io.BytesIO()
-    gridded_img.save(buf, format="PNG")
+    # Convert RGBA to RGB if necessary (JPEG doesn't support alpha channel)
+    if gridded_img.mode == "RGBA":
+        gridded_img = gridded_img.convert("RGB")
+    gridded_img.save(buf, format="JPEG", quality=72)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode("utf-8")
 

@@ -7,9 +7,10 @@
 ### Control Your Computer Using LLMs
 
 Open Interface
-- Self-drives your computer by sending your requests to an LLM backend (GPT-4o, Gemini, etc) to figure out the required steps.
+- Self-drives your computer by sending your requests to an LLM backend (GPT-4o, Gemini, Claude, etc) to figure out the required steps.
 - Automatically executes these steps by simulating keyboard and mouse input.
 - Course-corrects by sending the LLM backend updated screenshots of the progress as needed.
+- Features a modern Gradio web UI with an integrated settings panel and screen/window capture selector.
 
 
 <div align="center">
@@ -102,7 +103,7 @@ Open Interface
       </ul>
 </details>
       <ul>
-        <li>Lastly, checkout the <a href="#setup">Setup</a> section to connect Open Interface to LLMs (OpenAI GPT-4V)</li>
+        <li>Lastly, checkout the <a href="#setup">Setup</a> section to connect Open Interface to your preferred LLM provider.</li>
     </ul>
 </details>
 <details>
@@ -111,7 +112,7 @@ Open Interface
         <li>Linux binary has been tested on Ubuntu 20.04 so far.</li>
         <li>Download the Linux zip file from the latest <a href="https://github.com/AmberSahdev/Open-Interface/releases/latest">release</a>.</li>
         <li>
-            Extract the executable and checkout the <a href="https://github.com/AmberSahdev/Open-Interface?tab=readme-ov-file#setup">Setup</a> section to connect Open Interface to LLMs, such as OpenAI GPT-4V.</li>
+            Extract the executable and checkout the <a href="https://github.com/AmberSahdev/Open-Interface?tab=readme-ov-file#setup">Setup</a> section to connect Open Interface to your preferred LLM provider.</li>
     </ul>
 </details>
 <details>
@@ -120,7 +121,7 @@ Open Interface
 	<li>Windows binary has been tested on Windows 10.</li>
 	<li>Download the Windows zip file from the latest <a href="https://github.com/AmberSahdev/Open-Interface/releases/latest">release</a>.</li>
 	<li>Unzip the folder, move the exe to the desired location, double click to open, and voila.</li>
-	<li>Checkout the <a href="https://github.com/AmberSahdev/Open-Interface?tab=readme-ov-file#setup">Setup</a> section to connect Open Interface to LLMs (OpenAI GPT-4V)</li>
+	<li>Checkout the <a href="https://github.com/AmberSahdev/Open-Interface?tab=readme-ov-file#setup">Setup</a> section to connect Open Interface to your preferred LLM provider.</li>
     </ul>
 </details>
 
@@ -131,62 +132,68 @@ Open Interface
       <li>Enter the directory <code>cd Open-Interface</code></li>
       <li><b>Optionally</b> use a Python virtual environment 
         <ul>
-          <li>Note: pyenv handles tkinter installation weirdly so you may have to debug for your own system yourself.</li>
-          <li><code>pyenv local 3.12.2</code></li>
           <li><code>python -m venv .venv</code></li> 
           <li><code>source .venv/bin/activate</code></li>
         </ul>
       </li>
       <li>Install dependencies <code>pip install -r requirements.txt</code></li>
       <li>Run the app using <code>python app/app.py</code></li>
+      <li>The Gradio web UI will open in your browser at <code>http://127.0.0.1:7860</code></li>
     </ul>
 </details>
 
 ### <ins id="setup">Setup</ins> 🛠️
+
+Open Interface supports multiple LLM providers. Configure your preferred provider in the **⚙️ Settings** tab of the web UI.
+
+| Provider | Models | API Key Source |
+|----------|--------|----------------|
+| **OpenAI** | GPT-5, GPT-4o, etc. | [platform.openai.com](https://platform.openai.com/settings/organization/api-keys) |
+| **Gemini** | Gemini 2.5 Pro, Flash, etc. | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
+| **Claude** | Claude Sonnet 4, Opus 4, etc. | [console.anthropic.com](https://console.anthropic.com/settings/keys) |
+| **OpenRouter** | Any model via OpenRouter | [openrouter.ai](https://openrouter.ai/keys) |
+| **Ollama** | Local models (Llama, etc.) | No key needed — set endpoint URL |
+
 <details>
-    <summary><b>Set up the OpenAI API key</b></summary>
+    <summary><b>Quick Start</b></summary>
+
+1. Launch Open Interface (`python app/app.py` or run the executable).
+2. Go to the **⚙️ Settings** tab in the web UI.
+3. Under **🤖 LLM Mode & Provider**, select your provider and model.
+4. Under **🔑 API Keys**, paste your API key for the selected provider.
+5. Click **💾 Save Settings**.
+6. Switch to the **💬 Chat** tab and start sending requests!
+
+</details>
+
+<details>
+    <summary><b>Single vs Dual LLM Mode</b></summary>
+
+- **Single LLM**: One model handles both screenshots and video analysis.
+- **Dual LLM**: A primary model handles screenshots (e.g. Moondream for local inference), while a secondary model handles video and planning (e.g. Gemini Flash via API).
+
+Configure this under **🤖 LLM Mode & Provider** in Settings.
+
+</details>
+
+<details>
+    <summary><b>Legacy: OpenAI-only setup</b></summary>
 
 - Get your OpenAI API key
   - Open Interface needs access to GPT-4o to perform user requests. GPT-4o keys can be downloaded from your OpenAI account at [platform.openai.com/settings/organization/api-keys](https://platform.openai.com/settings/organization/api-keys).
   - [Follow the steps here](https://help.openai.com/en/articles/8264644-what-is-prepaid-billing) to add balance to your OpenAI account. To unlock GPT-4o a minimum payment of $5 is needed.
   - [More info](https://help.openai.com/en/articles/7102672-how-can-i-access-gpt-4)
-- Save the API key in Open Interface settings
-  - In Open Interface, go to the Settings menu on the top right and enter the key you received from OpenAI into the text field like so: <br>
-  <br>
-  <picture>
-	<img src="assets/set_openai_api_key.png" align="middle" alt="Set API key in settings" width="400">
-  </picture><br>
-  <br>
-
-- After setting the API key for the first time you'll need to <b>restart the app</b>.
-
-</details>
-
-<details>
-    <summary><b>Set up the Google Gemini API key</b></summary>
-
-- Go to Settings -> Advanced Settings and select the Gemini model you wish to use.
-- Get your Google Gemini API key from https://aistudio.google.com/app/apikey.
-- Save the API key in Open Interface settings.
-- Save the settings and <b>restart the app</b>.
+- Save the API key in Open Interface settings under **🔑 API Keys → OpenAI API Key**.
 
 </details>
 
 <details>
     <summary><b>Optional: Setup a Custom LLM</b></summary>
 
-- Open Interface supports using other OpenAI API style LLMs (such as Llava) as a backend and can be configured easily in the Advanced Settings window.
-- Enter the custom base url and model name in the Advanced Settings window and the API key in the Settings window as needed. 
-- NOTE - If you're using Llama:
-  - You may need to enter a random string like "xxx" in the API key input box.
-  - You may need to append /v1/ to the base URL.
-    <br>
-    <picture>
-      <img src="assets/advanced_settings.png" align="middle" alt="Set API key in settings" width="400">
-    </picture><br>
-    <br>
-- If your LLM does not support an OpenAI style API, you can use a library like [this](https://github.com/BerriAI/litellm) to convert it to one.
-- You will need to restart the app after these changes.
+- Open Interface supports using other OpenAI API style LLMs as a backend.
+- Select **OpenRouter** or **Ollama** as the provider, or set a custom base URL under **🎛️ General** settings.
+- For Ollama: install [Ollama](https://ollama.com), pull a model (e.g. `ollama pull llama3.3`), and set the endpoint to `http://localhost:11434`.
+- If your LLM does not support an OpenAI style API, you can use a library like [LiteLLM](https://github.com/BerriAI/litellm) to convert it to one.
 
 </details>
 
@@ -210,7 +217,10 @@ Open Interface
 - Cost Estimation: $0.0005 - $0.002 per LLM request depending on the model used.<br>
 (User requests can require between two to a few dozen LLM backend calls depending on the request's complexity.)
 - You can interrupt the app anytime by pressing the Stop button, or by dragging your cursor to any of the screen corners.
-- Open Interface can only see your primary display when using multiple monitors. Therefore, if the cursor/focus is on a secondary screen, it might keep retrying the same actions as it is unable to see its progress.
+- Use the **🖥️ Choose what to capture** section in the Chat tab to select a specific screen or window to control. This is especially useful with multiple monitors.
+- **Build Options**: The CI workflow supports building for Windows, macOS, and Linux, with two app types:
+  - **Server (localhost)**: A PyInstaller executable that runs the Gradio web UI in your browser.
+  - **Electron (desktop app)**: A native desktop window wrapping the Gradio UI.
 
 <hr>
 
@@ -219,23 +229,24 @@ Open Interface
 +----------------------------------------------------+
 | App                                                |
 |                                                    |
-|    +-------+                                       |
-|    |  GUI  |                                       |
-|    +-------+                                       |
+|    +----------+                                    |
+|    | Gradio   |                                    |
+|    | Web UI   |                                    |
+|    +----------+                                    |
 |        ^                                           |
-|        |                                           |
+|        | (direct calls + status_queue)             |
 |        v                                           |
 |  +-----------+  (Screenshot + Goal)  +-----------+ |
 |  |           | --------------------> |           | |
 |  |    Core   |                       |    LLM    | |
-|  |           | <-------------------- |  (GPT-4o) | |
+|  |           | <-------------------- |           | |
 |  +-----------+    (Instructions)     +-----------+ |
-|        |                                           |
-|        v                                           |
-|  +-------------+                                   |
-|  | Interpreter |                                   |
-|  +-------------+                                   |
-|        |                                           |
+|        |                              Providers:   |
+|        v                              · OpenAI     |
+|  +-------------+                      · Gemini     |
+|  | Interpreter |                      · Claude     |
+|  +-------------+                      · OpenRouter |
+|        |                              · Ollama     |
 |        v                                           |
 |  +-------------+                                   |
 |  |   Executer  |                                   |

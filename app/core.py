@@ -40,6 +40,8 @@ class Core:
 
     def stop_previous_request(self) -> None:
         self.interrupt_execution = True
+        # Cancel any in-progress prefetch so the background thread stops early
+        self._cancel_model_prefetch()
 
     def execute(self, user_request: str, step_num: int = 0) -> Optional[str]:
         """
@@ -74,6 +76,7 @@ class Core:
 
             for step in instructions['steps']:
                 if self.interrupt_execution:
+                    self._cancel_model_prefetch()
                     self.status_queue.put('Interrupted')
                     self.interrupt_execution = False
                     return 'Interrupted'
@@ -94,9 +97,29 @@ class Core:
             self.play_ding_on_completion()
             return instructions['done']
         else:
-            # if not done, continue to next phase
+            # Not done — kick off a prefetch so the next iteration's vision
+            # analysis runs in parallel with the recursive-call setup.
+            self._start_model_prefetch()
             self.status_queue.put('Fetching further instructions based on current state')
             return self.execute(user_request, step_num + 1)
+
+    # ------------------------------------------------------------------
+    # Prefetch helpers — delegate to model if it supports pipelining
+    # ------------------------------------------------------------------
+
+    def _start_model_prefetch(self) -> None:
+        """Ask the active model to start its next vision analysis in the
+        background.  Models that do not support prefetching simply ignore
+        this call."""
+        model = getattr(self.llm, 'model', None)
+        if model is not None and hasattr(model, 'prefetch_analysis'):
+            model.prefetch_analysis()
+
+    def _cancel_model_prefetch(self) -> None:
+        """Cancel any in-progress prefetch (e.g. on user interrupt)."""
+        model = getattr(self.llm, 'model', None) if self.llm else None
+        if model is not None and hasattr(model, 'cancel_prefetch'):
+            model.cancel_prefetch()
 
     def play_ding_on_completion(self):
         # Play ding sound to signal completion

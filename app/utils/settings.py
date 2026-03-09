@@ -3,6 +3,16 @@ import json
 import os
 from pathlib import Path
 
+# Keys that are obfuscated (base64-encoded) in the settings file.
+_SENSITIVE_KEYS = frozenset({
+    'api_key',
+    'openai_api_key',
+    'gemini_api_key',
+    'claude_api_key',
+    'openrouter_api_key',
+    'moondream_api_key',
+})
+
 
 class Settings:
     def __init__(self):
@@ -28,17 +38,14 @@ class Settings:
     def save_settings_to_file(self, settings_dict) -> None:
         settings: dict[str, str] = self._read_settings_file()
 
-        for setting_name in settings_dict:
-            setting_val = settings_dict[setting_name]
+        for setting_name, setting_val in settings_dict.items():
             if setting_val is not None:
-                if setting_name == "api_key":
-                    api_key = settings_dict["api_key"]
-
-                    # TODO: Now we have two keys OPENAI_API_KEY and GEMINI_API_KEY
-                    os.environ["OPENAI_API_KEY"] = api_key  # Set environment variable
-
-                    encoded_api_key = base64.b64encode(api_key.encode()).decode()
-                    settings['api_key'] = encoded_api_key
+                if setting_name in _SENSITIVE_KEYS and setting_val:
+                    if setting_name in ('api_key', 'openai_api_key'):
+                        os.environ["OPENAI_API_KEY"] = str(setting_val)
+                    settings[setting_name] = base64.b64encode(
+                        str(setting_val).encode()
+                    ).decode()
                 else:
                     settings[setting_name] = setting_val
 
@@ -46,27 +53,12 @@ class Settings:
             json.dump(settings, file, indent=4)
 
     def load_settings_from_file(self) -> dict[str, str]:
-        """
-        if os.path.exists(self.settings_file_path):
-            with open(self.settings_file_path, 'r') as file:
-                try:
-                    settings = json.load(file)
-                except:
-                    return {}
-
-                # Decode the API key
-                if 'api_key' in settings:
-                    decoded_api_key = base64.b64decode(settings['api_key']).decode()
-                    settings['api_key'] = decoded_api_key
-
-                return settings
-        else:
-            return {}
-        """
         settings: dict[str, str] = self._read_settings_file()
-        # Decode the API keys
-        if 'api_key' in settings:
-            decoded_api_key = base64.b64decode(settings['api_key']).decode()
-            settings['api_key'] = decoded_api_key
-
+        # Decode all API keys
+        for key in _SENSITIVE_KEYS:
+            if key in settings and settings[key]:
+                try:
+                    settings[key] = base64.b64decode(settings[key]).decode()
+                except (ValueError, base64.binascii.Error):
+                    pass  # Value may already be plain text (e.g. first run)
         return settings

@@ -13,6 +13,8 @@ class Interpreter:
         self.status_queue = status_queue
         # Cell-to-screen-coordinate map, updated each time a gridded screenshot is taken
         self.cell_map: dict[str, tuple[int, int]] = {}
+        # pyautogui sometimes ignores the first call; warm up once on first use
+        self._warmed_up = False
 
     def process_commands(self, json_commands: list[dict[str, Any]]) -> bool:
         """
@@ -74,7 +76,9 @@ class Interpreter:
             return
 
         # Sometimes pyautogui needs warming up i.e. sometimes first call isn't executed hence padding a random call here
-        pyautogui.press("command", interval=0.2)
+        if not self._warmed_up:
+            pyautogui.press("command", interval=0.2)
+            self._warmed_up = True
 
         if function_name == "sleep" and parameters.get("secs"):
             sleep(parameters.get("secs"))

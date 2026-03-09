@@ -1,9 +1,7 @@
 import sys
-import threading
 from multiprocessing import freeze_support
 
-from core import Core
-from ui import UI
+from web_ui import WebUI
 
 
 class App:
@@ -11,80 +9,42 @@ class App:
     +----------------------------------------------------+
     | App                                                |
     |                                                    |
-    |    +-------+                                       |
-    |    |  GUI  |                                       |
-    |    +-------+                                       |
+    |    +----------+                                    |
+    |    | Gradio   |                                    |
+    |    | Web UI   |                                    |
+    |    +----------+                                    |
     |        ^                                           |
-    |        | (via MP Queues)                           |
+    |        | (direct calls + status_queue)             |
     |        v                                           |
     |  +-----------+  (Screenshot + Goal)  +-----------+ |
     |  |           | --------------------> |           | |
     |  |    Core   |                       |    LLM    | |
-    |  |           | <-------------------- |  (GPT-4V) | |
+    |  |           | <-------------------- |           | |
     |  +-----------+    (Instructions)     +-----------+ |
     |        |                                           |
     |        v                                           |
     |  +-------------+                                   |
     |  | Interpreter |                                   |
     |  +-------------+                                   |
-    |        |                                           |
-    |        v                                           |
-    |  +-------------+                                   |
-    |  |   Executer  |                                   |
-    |  +-------------+                                   |
     +----------------------------------------------------+
+
+    The Gradio web UI replaces the previous Tkinter GUI.  It calls
+    Core.execute_user_request directly in a background thread and
+    streams status updates from Core.status_queue back to the
+    browser via Gradio's generator protocol — no bridging threads
+    needed.
     """
 
     def __init__(self):
-        self.core = Core()
-        self.ui = UI()
-
-        # Create threads to facilitate communication between core and ui through queues
-        self.core_to_ui_connection_thread = threading.Thread(target=self.send_status_from_core_to_ui, daemon=True)
-        self.ui_to_core_connection_thread = threading.Thread(target=self.send_user_request_from_ui_to_core, daemon=True)
-        self.window_selection_thread = threading.Thread(target=self.handle_window_selection, daemon=True)
+        # Core is created lazily by WebUI on first request so that
+        # settings changes can recreate it without restarting the app.
+        self.web_ui = WebUI()
 
     def run(self) -> None:
-        self.core_to_ui_connection_thread.start()
-        self.ui_to_core_connection_thread.start()
-        self.window_selection_thread.start()
-
-        self.ui.run()
-
-    def send_status_from_core_to_ui(self) -> None:
-        while True:
-            status: str = self.core.status_queue.get()
-            print(f'Sending status from thread - thread: {threading.current_thread().name}, status: {status}')
-            self.ui.display_current_status(status)
-
-    def send_user_request_from_ui_to_core(self) -> None:
-        while True:
-            user_request: str = self.ui.main_window.user_request_queue.get()
-            print(f'Sending user request: {user_request}')
-
-            if user_request == 'stop':
-                self.core.stop_previous_request()
-
-                # ensures all threads are joined before force quit (my code)
-                try:
-                    for thread in threading.enumerate():
-                        if thread != threading.main_thread():
-                            thread.join(timeout=2)
-                except Exception as e:
-                    continue
-
-            else:
-                threading.Thread(target=self.core.execute_user_request, args=(user_request,), daemon=True).start()
-
-    def handle_window_selection(self) -> None:
-        """Listen for window selection changes from the UI and update Core's capture region."""
-        while True:
-            region = self.ui.main_window.window_selection_queue.get()
-            print(f'Window selection changed: {region}')
-            self.core.set_capture_region(region)
+        self.web_ui.run()
 
     def cleanup(self):
-        self.core.cleanup()
+        self.web_ui.cleanup()
 
 
 if __name__ == '__main__':

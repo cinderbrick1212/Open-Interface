@@ -63,6 +63,7 @@ class UI:
             openai_models = [
                 ('GPT-5.2 (Default)', 'gpt-5.2'),
                 ('OpenAI computer-use-preview (GUI actions)', 'computer-use-preview'),
+                ('Moondream2 Hybrid (Local Moondream + Gemini Flash API)', 'moondream2'),
             ]
 
             gemini_models = [

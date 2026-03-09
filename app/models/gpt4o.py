@@ -1,5 +1,4 @@
 import json
-import time
 from typing import Any
 
 from models.model import Model
@@ -56,13 +55,10 @@ class GPT4o(Model):
             instructions=''
         )
 
-        while run.status != 'completed':
-            print(f'Waiting for response, sleeping for 1. run.status={run.status}')
-            time.sleep(1)
-
-            if run.status == 'failed':
-                print(f'failed run run.required_action:{run.required_action} run.last_error: {run.last_error}\n\n')
-                return None
+        # create_and_poll already blocks until the run reaches a terminal state.
+        if run.status == 'failed':
+            print(f'failed run run.required_action:{run.required_action} run.last_error: {run.last_error}\n\n')
+            return None
 
         if run.status == 'completed':
             # NOTE: Apparently right now the API doesn't have a way to retrieve just the last message???
@@ -73,7 +69,7 @@ class GPT4o(Model):
 
             return response.data[0]
         else:
-            print('Run did not complete successfully.')
+            print(f'Run did not complete successfully. Status: {run.status}')
             return None
 
     def upload_screenshot_and_get_file_id(self):
