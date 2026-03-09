@@ -1,4 +1,4 @@
-# Open Interface
+# Noclip Desktop
 
 ### Usage
 ```commandline

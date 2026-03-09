@@ -1,5 +1,5 @@
 /**
- * Open Interface — Electron main process.
+ * Noclip Desktop — Electron main process.
  *
  * Spawns the Python/Gradio backend as a child process, waits for the
  * server to become ready, then opens it in a BrowserWindow.
@@ -21,7 +21,7 @@ let serverProcess = null;
 /**
  * Resolve the path to the bundled Python server executable.
  *
- * In development the executable lives at ``../dist/open-interface-server/``.
+ * In development the executable lives at ``../dist/noclip-desktop-server/``.
  * In a packaged Electron app it is placed under ``resources/server/``.
  */
 function getServerPath() {
@@ -30,13 +30,13 @@ function getServerPath() {
     return path.join(process.resourcesPath, 'server', getServerBinary());
   }
   // Development fallback
-  return path.join(__dirname, '..', 'dist', 'open-interface-server', getServerBinary());
+  return path.join(__dirname, '..', 'dist', 'noclip-desktop-server', getServerBinary());
 }
 
 function getServerBinary() {
   return process.platform === 'win32'
-    ? 'Open Interface.exe'
-    : 'Open Interface';
+    ? 'Noclip Desktop.exe'
+    : 'Noclip Desktop';
 }
 
 function startServer() {
@@ -94,7 +94,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    title: 'Open Interface',
+    title: 'Noclip Desktop',
     icon: path.join(__dirname, '..', 'app', 'resources', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

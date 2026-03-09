@@ -46,7 +46,7 @@ from app.version import version
 
 def build(signing_key=None):
     input('Did you remember to increment version.py? ' + str(version))
-    app_name = 'Open\\ Interface'
+    app_name = 'Noclip\\ Desktop'
 
     compile(signing_key)
 
@@ -85,7 +85,7 @@ def compile(signing_key=None):
         # '--debug=all',
 
         # --- Basics --- #
-        '--name=Open Interface',
+        '--name=Noclip Desktop',
         '--icon=app/resources/icon.png',
         # '--onefile',  # NOTE: Might not work on Windows. Also discouraged to enable both windowed and one file on Mac.
 
@@ -154,9 +154,9 @@ def compile(signing_key=None):
 def zip():
     # Zip the app
     print('Zipping the executables')
-    app_name = 'Open\\ Interface'
+    app_name = 'Noclip\\ Desktop'
 
-    zip_name = 'Open-Interface-v' + str(version)
+    zip_name = 'Noclip-Desktop-v' + str(version)
     if platform.system() == 'Darwin':  # MacOS
         if platform.processor() == 'arm':
             zip_name = zip_name + '-MacOS-M-Series' + '.zip'
@@ -170,7 +170,7 @@ def zip():
         zip_cli_command = 'cd dist/; zip -r9 ' + zip_name + ' ' + app_name
     elif platform.system() == 'Windows':
         zip_name = zip_name + '-Windows.zip'
-        zip_cli_command = 'cd dist & powershell Compress-Archive -Path \'Open Interface.exe\' -DestinationPath ' + zip_name
+        zip_cli_command = 'cd dist & powershell Compress-Archive -Path \'Noclip Desktop.exe\' -DestinationPath ' + zip_name
 
     # input(f'zip_cli_command - {zip_cli_command} \nExecute?')
     os.system(zip_cli_command)

@@ -1,4 +1,4 @@
-"""Gradio-based web UI for Open Interface.
+"""Gradio-based web UI for Noclip Desktop.
 
 Replaces the previous Tkinter UI with a modern AI-frontend chat
 interface.  Provides a ChatGPT / Claude-like experience with an
@@ -53,7 +53,7 @@ _SEARCH_KEYWORDS: list[list[str]] = [
 
 
 class WebUI:
-    """Gradio-based web UI for Open Interface."""
+    """Gradio-based web UI for Noclip Desktop."""
 
     def __init__(self, core=None):
         self._core = core
@@ -96,10 +96,10 @@ class WebUI:
         sd = Settings().get_dict()
 
         with gr.Blocks(
-            title='Open Interface',
+            title='Noclip Desktop',
         ) as demo:
             gr.Markdown(
-                f"## 🔮 Open Interface `v{version}`\n"
+                f"## 🔮 Noclip Desktop `v{version}`\n"
                 "Control your computer with natural language."
             )
 
@@ -395,7 +395,7 @@ class WebUI:
                 value=sd.get('buffer_directory', ''),
                 label='Buffer & Screenshot Directory',
                 info='Where screenshots and video buffers are saved. '
-                     'Leave empty for default (~/.open-interface/)',
+                     'Leave empty for default (~/.noclip-desktop/)',
             )
             retention_dd = gr.Dropdown(
                 RETENTION_POLICIES,

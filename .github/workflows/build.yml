@@ -38,9 +38,9 @@ jobs:
       - id: compute
         shell: bash
         run: |
-          WINDOWS='{"os_name":"Windows","runner":"windows-latest","artifact_suffix":"Windows","pyinstaller_sep":";","exe_name":"Open Interface.exe"}'
-          MACOS='{"os_name":"macOS","runner":"macos-latest","artifact_suffix":"macOS","pyinstaller_sep":":","exe_name":"Open Interface"}'
-          LINUX='{"os_name":"Linux","runner":"ubuntu-latest","artifact_suffix":"Linux","pyinstaller_sep":":","exe_name":"Open Interface"}'
+          WINDOWS='{"os_name":"Windows","runner":"windows-latest","artifact_suffix":"Windows","pyinstaller_sep":";","exe_name":"Noclip Desktop.exe"}'
+          MACOS='{"os_name":"macOS","runner":"macos-latest","artifact_suffix":"macOS","pyinstaller_sep":":","exe_name":"Noclip Desktop"}'
+          LINUX='{"os_name":"Linux","runner":"ubuntu-latest","artifact_suffix":"Linux","pyinstaller_sep":":","exe_name":"Noclip Desktop"}'
 
           OS="${{ github.event.inputs.os }}"
           EVENT="${{ github.event_name }}"
@@ -104,7 +104,7 @@ jobs:
           pyinstaller_options = [
               '--clean',
               '--noconfirm',
-              '--name=Open Interface',
+              '--name=Noclip Desktop',
               '--icon=app/resources/icon.png',
               '--onefile',
               '--hidden-import=pyautogui',
@@ -144,8 +144,8 @@ jobs:
           github.event_name == 'push'
         shell: bash
         run: |
-          mkdir -p dist/open-interface-server
-          cp "dist/${{ matrix.exe_name }}" dist/open-interface-server/
+          mkdir -p dist/noclip-desktop-server
+          cp "dist/${{ matrix.exe_name }}" dist/noclip-desktop-server/
 
       - name: Install Electron dependencies
         if: >-
@@ -176,7 +176,7 @@ jobs:
           github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
-          name: Open-Interface-Server-${{ matrix.artifact_suffix }}
+          name: Noclip-Desktop-Server-${{ matrix.artifact_suffix }}
           path: dist/${{ matrix.exe_name }}
 
       - name: Upload Electron artifact
@@ -185,7 +185,7 @@ jobs:
           github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
-          name: Open-Interface-Electron-${{ matrix.artifact_suffix }}
+          name: Noclip-Desktop-Electron-${{ matrix.artifact_suffix }}
           path: electron/dist/*
 
       # ── Release assets (tag pushes only) ────────────────────────
@@ -196,9 +196,9 @@ jobs:
           cd dist
           if [ "${{ matrix.os_name }}" = "Windows" ]; then
             powershell Compress-Archive -Path '"${{ matrix.exe_name }}"' \
-              -DestinationPath "Open-Interface-${{ github.ref_name }}-${{ matrix.artifact_suffix }}-Server.zip"
+              -DestinationPath "Noclip-Desktop-${{ github.ref_name }}-${{ matrix.artifact_suffix }}-Server.zip"
           else
-            zip -r9 "Open-Interface-${{ github.ref_name }}-${{ matrix.artifact_suffix }}-Server.zip" \
+            zip -r9 "Noclip-Desktop-${{ github.ref_name }}-${{ matrix.artifact_suffix }}-Server.zip" \
               "${{ matrix.exe_name }}"
           fi
 
@@ -207,5 +207,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/Open-Interface-${{ github.ref_name }}-${{ matrix.artifact_suffix }}-Server.zip
+            dist/Noclip-Desktop-${{ github.ref_name }}-${{ matrix.artifact_suffix }}-Server.zip
             electron/dist/*

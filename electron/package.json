@@ -1,7 +1,7 @@
 {
-  "name": "open-interface",
+  "name": "noclip-desktop",
   "version": "1.0.0",
-  "description": "Open Interface — Control your computer with natural language",
+  "description": "Noclip Desktop — Control your computer with natural language",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -10,15 +10,15 @@
     "dist:linux": "electron-builder --linux"
   },
   "build": {
-    "appId": "com.openinterface.app",
-    "productName": "Open Interface",
+    "appId": "com.noclipdesktop.app",
+    "productName": "Noclip Desktop",
     "files": [
       "main.js",
       "preload.js"
     ],
     "extraResources": [
       {
-        "from": "../dist/open-interface-server",
+        "from": "../dist/noclip-desktop-server",
         "to": "server",
         "filter": ["**/*"]
       }
