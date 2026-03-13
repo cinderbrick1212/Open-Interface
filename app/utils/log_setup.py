@@ -6,7 +6,6 @@ All ``print()`` calls and ``logging.*`` calls are captured in the log file
 via a stdout/stderr tee so that no existing code needs to be changed.
 """
 
-import atexit
 import logging
 import os
 import sys
@@ -31,17 +30,24 @@ def _get_log_dir() -> str:
 
 
 class _Tee:
-    """Write to both *original* stream and an open *log_file* handle.
+    """Write to both *original* stream and the ``RotatingFileHandler``'s stream.
 
-    Replacing ``sys.stdout`` / ``sys.stderr`` with this class ensures that
-    every ``print()`` statement as well as any ``logging.StreamHandler``
-    output ends up in both the console and the log file without requiring
-    changes throughout the codebase.
+    Holds a reference to the :class:`~logging.handlers.RotatingFileHandler`
+    rather than a separate ``open()`` file handle.  This means:
+
+    * There is only **one** file handle for the log file (the handler's own),
+      so writes from ``logging.*`` calls and from ``print()`` never interleave
+      through competing handles.
+    * After a log rotation the handler updates ``handler.stream`` to the new
+      file; because the tee always uses ``self._handler.stream``, it follows
+      the rotation automatically.
+    * The handler's threading lock is acquired for every write, keeping
+      ``handler.emit()`` and direct stream writes mutually exclusive.
     """
 
-    def __init__(self, original, log_file):
+    def __init__(self, original, handler: RotatingFileHandler):
         self._original = original
-        self._log_file = log_file
+        self._handler = handler
 
     def write(self, data: str) -> int:
         n = 0
@@ -50,9 +56,16 @@ class _Tee:
                 n = self._original.write(data)
             except Exception:  # pylint: disable=broad-except
                 pass
+        # Acquire the handler's lock so that this write and any concurrent
+        # handler.emit() call are serialised; handler.stream follows rotations.
         try:
-            self._log_file.write(data)
-            self._log_file.flush()
+            self._handler.acquire()
+            try:
+                if self._handler.stream:
+                    self._handler.stream.write(data)
+                    self._handler.stream.flush()
+            finally:
+                self._handler.release()
         except Exception:  # pylint: disable=broad-except
             pass
         return n
@@ -64,7 +77,12 @@ class _Tee:
             except Exception:  # pylint: disable=broad-except
                 pass
         try:
-            self._log_file.flush()
+            self._handler.acquire()
+            try:
+                if self._handler.stream:
+                    self._handler.stream.flush()
+            finally:
+                self._handler.release()
         except Exception:  # pylint: disable=broad-except
             pass
 
@@ -87,6 +105,9 @@ def setup_logging() -> str:
     * ``sys.stdout`` and ``sys.stderr`` are replaced with :class:`_Tee`
       instances that mirror output to both the terminal and the log file,
       capturing every ``print()`` statement without touching existing code.
+    * The tee writes directly to ``file_handler.stream`` (under the handler's
+      lock) so there is only one file handle and log rotation is handled
+      transparently.
 
     Returns the absolute path of the log file.
     """
@@ -106,7 +127,7 @@ def setup_logging() -> str:
         datefmt='%Y-%m-%d %H:%M:%S',
     )
 
-    # Rotating file handler — the primary sink for logging.* calls
+    # Rotating file handler — the single, shared file handle for the log file
     file_handler = RotatingFileHandler(
         log_path, maxBytes=1_000_000, backupCount=3, encoding='utf-8',
     )
@@ -114,11 +135,10 @@ def setup_logging() -> str:
     file_handler.setFormatter(fmt)
     root.addHandler(file_handler)
 
-    # Tee stdout and stderr so that print() statements also land in the log
-    _log_file = open(log_path, 'a', encoding='utf-8', buffering=1)  # pylint: disable=consider-using-with
-    atexit.register(_log_file.close)
-    sys.stdout = _Tee(sys.__stdout__, _log_file)
-    sys.stderr = _Tee(sys.__stderr__, _log_file)
+    # Tee stdout/stderr through the handler's stream so print() output also
+    # lands in the log file.  No second open() handle is needed.
+    sys.stdout = _Tee(sys.__stdout__, file_handler)
+    sys.stderr = _Tee(sys.__stderr__, file_handler)
 
     logging.info("Logging started — log file: %s", log_path)
     return log_path
