@@ -1,6 +1,7 @@
 import sys
 from multiprocessing import freeze_support
 
+from utils.log_setup import setup_logging
 from web_ui import WebUI
 
 
@@ -49,6 +50,7 @@ class App:
 
 if __name__ == '__main__':
     freeze_support()  # As required by pyinstaller https://www.pyinstaller.org/en/stable/common-issues-and-pitfalls.html#multi-processing
+    setup_logging()
     app = App()
     app.run()
     app.cleanup()
