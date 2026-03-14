@@ -13,9 +13,11 @@ class AgentState(TypedDict, total=False):
         instructions: The latest LLM response dict ({steps: [...], done: ...}).
         done: None while in progress; a string message when the task is complete.
         error: None unless an error occurred during execution.
+        dom_context: Optional[dict] containing interactive DOM nodes if available.
     """
     user_request: str
     step_num: int
     instructions: dict[str, Any]
     done: Optional[str]
     error: Optional[str]
+    dom_context: Optional[dict[str, Any]]

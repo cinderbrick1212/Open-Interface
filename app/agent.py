@@ -18,7 +18,9 @@ def create_agent(
     screen,
     status_queue,
     max_steps: int,
+    max_steps: int,
     exec_client=None,
+    browser_client=None,
     interrupt_check: Optional[Callable[[], bool]] = None,
 ):
     """Build and compile the execution graph.
@@ -47,8 +49,19 @@ def create_agent(
             return {'done': msg, 'error': None}
 
         try:
+            # Inject DOM context if available
+            dom_context = None
+            if browser_client and browser_client.is_available():
+                dom_context = browser_client.get_dom_context()
+            
+            prompt = state['user_request']
+            if dom_context and dom_context.get('nodes'):
+                import json
+                nodes_str = json.dumps(dom_context['nodes'])
+                prompt += f"\n\n[Active Browser DOM Context for {dom_context.get('url')}]:\n{nodes_str}"
+            
             instructions = llm.get_instructions_for_objective(
-                state['user_request'], step_num
+                prompt, step_num
             )
 
             # Sync cell map
@@ -81,12 +94,18 @@ def create_agent(
         instructions = state.get('instructions', {})
 
         for step in instructions.get('steps', []):
-            # Check for user interrupt before each step
             if interrupt_check and interrupt_check():
                 status_queue.put('Interrupted')
                 return {'done': 'Interrupted'}
 
-            if exec_client:
+            func = step.get('function')
+            params = step.get('parameters', {})
+
+            if func == 'click_dom_id' and browser_client:
+                success = browser_client.click_dom_id(params.get('node_id'))
+            elif func == 'type_dom_id' and browser_client:
+                success = browser_client.type_dom_id(params.get('node_id'), params.get('text'))
+            elif exec_client:
                 success = exec_client.execute_command(step)
             else:
                 success = interpreter.process_command(step)

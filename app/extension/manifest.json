@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Noclip Desktop Assistant",
+  "version": "1.0.0",
+  "description": "Bridges the Noclip local AI agent with the browser DOM.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background/background.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content.js"]
+    }
+  ]
+}

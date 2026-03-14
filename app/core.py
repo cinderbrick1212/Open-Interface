@@ -27,6 +27,19 @@ class Core:
         if self._use_sandbox:
             self._exec_client = ExecutionClient()
 
+        # Opt-in: use browser extension via websocket
+        self._browser_service = None
+        self._browser_client = None
+        if self.settings_dict.get('use_browser_extension', True):
+            try:
+                from browser_service import BrowserService
+                from browser_client import BrowserClient
+                self._browser_service = BrowserService()
+                self._browser_service.start()
+                self._browser_client = BrowserClient(self._browser_service)
+            except Exception as e:
+                self.status_queue.put(f"Failed to start BrowserService: {e}")
+
         self.llm = None
         try:
             self.llm = LLM(self.screen)
@@ -143,6 +156,7 @@ class Core:
             status_queue=self.status_queue,
             max_steps=MAX_STEPS,
             exec_client=self._exec_client,
+            browser_client=self._browser_client,
             interrupt_check=lambda: self.interrupt_execution,
         )
 
@@ -190,3 +204,5 @@ class Core:
         self.llm.cleanup()
         if self._exec_client:
             self._exec_client.shutdown()
+        if self._browser_service:
+            self._browser_service.stop()

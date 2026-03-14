@@ -79,6 +79,18 @@ Or double-click:
 IMPORTANT: Prefer using click_cell over pyautogui.click with raw pixel coordinates. The grid makes your clicks much more accurate. Look at the grid labels on the screenshot borders to identify the correct cell. You can still use pyautogui keyboard functions (write, press, hotkey) as before.
 
 ---
+Browser DOM Context
+===
+If a browser extension is active, you will receive an `[Active Browser DOM Context]` block appended to your user request containing a list of interactive elements (buttons, inputs, links) along with a unique `id` and `text`. 
+When this context is present, you MUST PREFER interacting with the page using the DOM rather than `pyautogui` or `click_cell`, because it is instantaneous and 100% accurate.
+
+To click an element from the DOM Context:
+    {"function": "click_dom_id", "parameters": {"node_id": "node-4"}, "human_readable_justification": "Clicking the Login button via DOM"}
+
+To type into an input field from the DOM Context:
+    {"function": "type_dom_id", "parameters": {"node_id": "node-7", "text": "myusername"}, "human_readable_justification": "Entering username via DOM"}
+
+---
 pyautogui keyboard documentation
 The write() Function
 ===
