@@ -11,6 +11,14 @@ LABEL_MARGIN = 20  # pixels reserved for row/column labels on the border
 # Cache the font at module level so it is loaded from disk only once.
 _cached_font = None
 
+try:
+    from noclip_rs import build_cell_map as _rust_build_cell_map
+    from noclip_rs import draw_grid_overlay_rgba as _rust_draw_grid_overlay
+    from noclip_rs import encode_jpeg_b64 as _rust_encode_jpeg_b64
+    _USE_RUST = True
+except ImportError:
+    _USE_RUST = False
+
 
 def _get_font():
     global _cached_font
@@ -45,6 +53,10 @@ def _build_cell_map(region: tuple[int, int, int, int], cell_size: int = CELL_SIZ
     Returns dict like {"A1": (screen_x, screen_y), ...}
     """
     rx, ry, rw, rh = region
+    
+    if _USE_RUST:
+        return _rust_build_cell_map(rx, ry, rw, rh, cell_size)
+
     cols = rw // cell_size
     rows = rh // cell_size
 
@@ -68,6 +80,15 @@ def draw_grid_overlay(img: Image.Image, cell_size: int = CELL_SIZE) -> Image.Ima
     Returns a new image with the grid and labels drawn.
     """
     w, h = img.size
+    
+    if _USE_RUST:
+        # Pass raw RGBA bytes to Rust
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
+        raw_bytes = img.tobytes()
+        result_bytes = _rust_draw_grid_overlay(raw_bytes, w, h, cell_size)
+        return Image.frombytes("RGBA", (w + LABEL_MARGIN, h + LABEL_MARGIN), bytes(result_bytes)).convert("RGB")
+
     cols = w // cell_size
     rows = h // cell_size
 
@@ -128,6 +149,14 @@ def gridded_screenshot_to_base64(gridded_img: Image.Image) -> str:
     payload size and speed up API uploads with negligible quality loss for LLM
     vision tasks.
     """
+    if _USE_RUST:
+        if gridded_img.mode != "RGBA":
+            gridded_img = gridded_img.convert("RGBA")
+        raw_bytes = gridded_img.tobytes()
+        w, h = gridded_img.size
+        # Call the Rust JPEG encoder + base64 convertor
+        return _rust_encode_jpeg_b64(raw_bytes, w, h, 72)
+
     buf = io.BytesIO()
     # Convert RGBA to RGB if necessary (JPEG doesn't support alpha channel)
     if gridded_img.mode == "RGBA":

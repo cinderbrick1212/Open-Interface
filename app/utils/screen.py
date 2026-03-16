@@ -10,6 +10,12 @@ from PIL import Image
 from utils.settings import Settings
 from utils.grid import create_gridded_screenshot, gridded_screenshot_to_base64
 
+try:
+    from noclip_rs import encode_jpeg_b64 as _rust_encode_jpeg_b64
+    _USE_RUST = True
+except ImportError:
+    _USE_RUST = False
+
 # Maximum width (in pixels) for screenshots sent to LLMs. Larger images are
 # downscaled proportionally before encoding, which significantly reduces
 # payload size and speeds up API calls without meaningful quality loss for
@@ -76,6 +82,13 @@ class Screen:
         # Base64 images work with ChatCompletions API but not Assistants API
         img = self.get_screenshot()
         img = _downscale(img)
+        
+        if _USE_RUST:
+            if img.mode != "RGBA":
+                img = img.convert("RGBA")
+            w, h = img.size
+            return _rust_encode_jpeg_b64(img.tobytes(), w, h, 72)
+            
         buf = io.BytesIO()
         img.save(buf, format='JPEG', quality=72)
         buf.seek(0)
